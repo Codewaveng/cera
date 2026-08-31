@@ -34,6 +34,15 @@ const userSchema = new mongoose.Schema({
     submittedAt: { type: Date, default: null },
   },
 
+  ceraTag: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true,
+    default: null,
+  },
+
   fcmToken: { type: String, default: null },
 
   autoProcessing: {
@@ -80,6 +89,7 @@ userSchema.methods.toPublic = function () {
   return {
     id: this._id,
     ceraId: this.ceraId,
+    ceraTag: this.ceraTag || null,
     name: this.name,
     email: this.email,
     phone: this.phone,

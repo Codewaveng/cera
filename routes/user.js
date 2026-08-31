@@ -71,25 +71,73 @@ router.put('/kyc', async (req, res) => {
   }
 });
 
-// GET /api/user/lookup?q=email_or_ceraid  (find another CERA user for transfers)
+// GET /api/user/lookup?q=email_or_ceraid_or_@tag  (find another CERA user for transfers)
 router.get('/lookup', async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.trim().length < 3) return res.status(400).json({ error: 'Query too short' });
 
     const query = q.trim();
-    const isEmail = query.includes('@');
+    // Email: contains @ and a dot after the @
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query);
+    // @tag: starts with @
+    const isTag = !isEmail && query.startsWith('@');
+    const tagValue = isTag ? query.slice(1).toLowerCase() : query.toLowerCase();
 
-    const found = await User.findOne(
-      isEmail ? { email: query.toLowerCase() } : { ceraId: query.toUpperCase() }
-    ).select('ceraId name email avatar');
+    let found;
+    if (isEmail) {
+      found = await User.findOne({ email: query.toLowerCase() }).select('ceraId ceraTag name email avatar');
+    } else if (isTag) {
+      found = await User.findOne({ ceraTag: tagValue }).select('ceraId ceraTag name email avatar');
+    } else {
+      // Try ceraId first, then ceraTag
+      found = await User.findOne({
+        $or: [{ ceraId: query.toUpperCase() }, { ceraTag: tagValue }],
+      }).select('ceraId ceraTag name email avatar');
+    }
 
     if (!found) return res.status(404).json({ error: 'No CERA user found' });
     if (found._id.toString() === req.user._id.toString()) {
       return res.status(400).json({ error: "You can't transfer to yourself" });
     }
 
-    res.json({ user: { ceraId: found.ceraId, name: found.name, email: found.email, avatar: found.avatar } });
+    res.json({ user: { ceraId: found.ceraId, ceraTag: found.ceraTag || null, name: found.name, email: found.email, avatar: found.avatar } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/user/check-tag?tag=xxx
+router.get('/check-tag', async (req, res) => {
+  try {
+    const { tag } = req.query;
+    if (!tag || tag.length < 3) return res.status(400).json({ error: 'Tag must be at least 3 characters' });
+    const clean = tag.toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    if (clean !== tag.toLowerCase()) return res.status(400).json({ error: 'Invalid tag characters' });
+    const existing = await User.findOne({ ceraTag: clean });
+    res.json({ available: !existing, tag: clean });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/user/claim-tag
+router.post('/claim-tag', async (req, res) => {
+  try {
+    const { tag } = req.body;
+    if (!tag || tag.length < 3) return res.status(400).json({ error: 'Tag must be at least 3 characters' });
+    const clean = tag.toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    if (clean.length < 3) return res.status(400).json({ error: 'Invalid tag' });
+
+    const user = await User.findById(req.user._id);
+    if (user.ceraTag) return res.status(400).json({ error: 'You already have a CERA tag' });
+
+    const existing = await User.findOne({ ceraTag: clean });
+    if (existing) return res.status(400).json({ error: 'Tag already taken. Choose another.' });
+
+    user.ceraTag = clean;
+    await user.save();
+    res.json({ ceraTag: clean, message: `@${clean} is yours!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
