@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const transferRoutes = require('./routes/transfer');
 const ratesRoutes = require('./routes/rates');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/transfer', transferRoutes);
 app.use('/api/rates', ratesRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/health', (_, res) => res.json({ status: 'ok', app: 'CERA API' }));
