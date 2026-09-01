@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { generateCeraId } = require('../utils/helpers');
 const { createUserWallet } = require('../utils/turnkey');
 const { registerBTCAddress } = require('../utils/monitor');
+const { evmToTron } = require('../utils/chainPoller');
 
 function signToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' });
@@ -33,7 +34,7 @@ router.post('/register', async (req, res) => {
     createUserWallet(user._id.toString())
       .then(async ({ walletId, evm, sol, btc }) => {
         user.turnkeyWalletId = walletId;
-        user.cryptoAddresses = { evm, sol, btc };
+        user.cryptoAddresses = { evm, sol, btc, tron: evmToTron(evm) };
         await user.save();
         // Register BTC for real-time webhook; EVM/SOL/TRON are polled automatically
         await registerBTCAddress(btc);

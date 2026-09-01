@@ -59,12 +59,13 @@ const userSchema = new mongoose.Schema({
   // Real on-chain wallet addresses (created via Turnkey on signup)
   turnkeyWalletId: { type: String, default: null },
   cryptoAddresses: {
-    evm: { type: String, default: null }, // ETH + Polygon + BNB + Sei (same address)
-    sol: { type: String, default: null }, // Solana
-    btc: { type: String, default: null }, // Bitcoin
-    ton: { type: String, default: null }, // TON (future)
-    sui: { type: String, default: null }, // Sui (future)
-    stx: { type: String, default: null }, // Stacks (future)
+    evm:  { type: String, default: null }, // ETH + Polygon + BNB (same key)
+    tron: { type: String, default: null }, // TRON — derived from EVM key
+    sol:  { type: String, default: null }, // Solana
+    btc:  { type: String, default: null }, // Bitcoin
+    ton:  { type: String, default: null }, // TON (future)
+    sui:  { type: String, default: null }, // Sui (future)
+    stx:  { type: String, default: null }, // Stacks (future)
   },
 }, { timestamps: true });
 
