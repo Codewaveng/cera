@@ -1,56 +1,39 @@
-const { Turnkey } = require('@turnkey/sdk-server');
+const {
+  Turnkey,
+  DEFAULT_ETHEREUM_ACCOUNTS,
+  DEFAULT_SOLANA_ACCOUNTS,
+  DEFAULT_BITCOIN_MAINNET_P2WPKH_ACCOUNTS,
+  DEFAULT_TRON_ACCOUNTS,
+} = require('@turnkey/sdk-server');
 
-const turnkey = new Turnkey({
-  apiBaseUrl: 'https://api.turnkey.com',
-  apiPublicKey:  process.env.TURNKEY_API_PUBLIC_KEY,
-  apiPrivateKey: process.env.TURNKEY_API_PRIVATE_KEY,
-  defaultOrganizationId: process.env.TURNKEY_ORGANIZATION_ID,
-});
-
-// One wallet per user, 3 accounts covering all 9 chains:
-//   EVM  → ETH + Polygon + BNB + Sei  (same address)
-//   SOL  → Solana
-//   BTC  → Bitcoin (SegWit bech32)
+// One HD wallet per user → 4 accounts (EVM, SOL, BTC, TRON)
 const WALLET_ACCOUNTS = [
-  {
-    curve:         'CURVE_SECP256K1',
-    pathFormat:    'PATH_FORMAT_BIP32',
-    path:          "m/44'/60'/0'/0/0",
-    addressFormat: 'ADDRESS_FORMAT_ETHEREUM',
-  },
-  {
-    curve:         'CURVE_ED25519',
-    pathFormat:    'PATH_FORMAT_BIP32',
-    path:          "m/44'/501'/0'/0'",
-    addressFormat: 'ADDRESS_FORMAT_SOLANA',
-  },
-  {
-    curve:         'CURVE_SECP256K1',
-    pathFormat:    'PATH_FORMAT_BIP32',
-    path:          "m/44'/0'/0'/0/0",
-    addressFormat: 'ADDRESS_FORMAT_BITCOIN_MAINNET_P2WPKH',
-  },
+  ...DEFAULT_ETHEREUM_ACCOUNTS,              // ETH + Polygon + BNB (same EVM address)
+  ...DEFAULT_SOLANA_ACCOUNTS,               // Solana
+  ...DEFAULT_BITCOIN_MAINNET_P2WPKH_ACCOUNTS, // Bitcoin native SegWit
+  ...DEFAULT_TRON_ACCOUNTS,                 // TRON (native address, no derivation needed)
 ];
 
-// Creates a Turnkey wallet for a new user.
-// Returns: { walletId, evm, sol, btc }
+// Creates a Turnkey wallet for a new user — returns all 4 addresses
 async function createUserWallet(userId) {
-  const client = turnkey.apiClient();
+  const turnkey = new Turnkey({
+    apiBaseUrl:             'https://api.turnkey.com',
+    apiPublicKey:           process.env.TURNKEY_API_PUBLIC_KEY,
+    apiPrivateKey:          process.env.TURNKEY_API_PRIVATE_KEY,
+    defaultOrganizationId:  process.env.TURNKEY_ORGANIZATION_ID,
+  });
 
+  const client = turnkey.apiClient();
   const result = await client.createWallet({
-    walletName: `cera-user-${userId}`,
-    accounts:   WALLET_ACCOUNTS,
+    walletName:     `cera-user-${userId}`,
+    accounts:       WALLET_ACCOUNTS,
     organizationId: process.env.TURNKEY_ORGANIZATION_ID,
   });
 
-  const [evmAddress, solAddress, btcAddress] = result.addresses;
+  // addresses array matches WALLET_ACCOUNTS order: [evm, sol, btc, tron]
+  const [evm, sol, btc, tron] = result.addresses;
 
-  return {
-    walletId: result.walletId,
-    evm: evmAddress,   // covers ETH, Polygon, BNB, Sei
-    sol: solAddress,
-    btc: btcAddress,
-  };
+  return { walletId: result.walletId, evm, sol, btc, tron };
 }
 
 module.exports = { createUserWallet };

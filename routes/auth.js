@@ -5,7 +5,6 @@ const authMiddleware = require('../middleware/auth');
 const { generateCeraId } = require('../utils/helpers');
 const { createUserWallet } = require('../utils/turnkey');
 const { registerBTCAddress } = require('../utils/monitor');
-const { evmToTron } = require('../utils/chainPoller');
 const { addEVMAddress, subscribeSOLAddress } = require('../utils/blockchainWatcher');
 
 function signToken(id) {
@@ -31,19 +30,23 @@ router.post('/register', async (req, res) => {
     // Create user first so we have their _id for the wallet name
     const user = await User.create({ name, email, phone, password, ceraId });
 
-    // Create real Turnkey wallets in the background — don't block registration
-    createUserWallet(user._id.toString())
-      .then(async ({ walletId, evm, sol, btc }) => {
-        user.turnkeyWalletId = walletId;
-        user.cryptoAddresses = { evm, sol, btc, tron: evmToTron(evm) };
-        await user.save();
-        // BTC: real-time via BlockCypher webhook
-        await registerBTCAddress(btc);
-        // EVM/Solana: add to live WebSocket watchers for instant detection
-        addEVMAddress(evm);
-        subscribeSOLAddress(sol);
-      })
-      .catch((err) => console.error('Turnkey wallet creation failed:', err.message));
+    // Create Turnkey wallets synchronously — user receives wallet addresses immediately
+    try {
+      const { walletId, evm, sol, btc, tron } = await createUserWallet(user._id.toString());
+      user.turnkeyWalletId = walletId;
+      user.cryptoAddresses = { evm, sol, btc, tron };
+      await user.save();
+
+      // Register addresses for real-time monitoring
+      await registerBTCAddress(btc);
+      addEVMAddress(evm);
+      subscribeSOLAddress(sol);
+
+      console.log(`✅ Wallets created for ${user.ceraId}: EVM=${evm} SOL=${sol} BTC=${btc} TRON=${tron}`);
+    } catch (walletErr) {
+      console.error('❌ Turnkey wallet creation failed:', walletErr.message);
+      // User is registered but without wallets — the receive screen auto-retry will handle it
+    }
 
     res.status(201).json({
       token: signToken(user._id),
