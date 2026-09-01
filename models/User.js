@@ -53,8 +53,9 @@ const userSchema = new mongoose.Schema({
     accountName: { type: String, default: null },
   },
 
-  // Timestamp of last on-chain poll (used by chainPoller to fetch only new txs)
-  lastTxCheck: { type: Date, default: null },
+  // Timestamps of last on-chain poll per chain (used by pollers to fetch only new txs)
+  lastTxCheck:   { type: Date, default: null },
+  lastTronCheck: { type: Date, default: null },
 
   // Real on-chain wallet addresses (created via Turnkey on signup)
   turnkeyWalletId: { type: String, default: null },
