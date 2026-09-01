@@ -91,7 +91,7 @@ async function checkEVMChain(address, chain, since) {
   return results;
 }
 
-// ── Solana (SPL USDT / USDC) ───────────────────────────────────────────────
+// ── Solana (native SOL + SPL USDT / USDC) ─────────────────────────────────
 async function solRpc(method, params) {
   const r = await fetch(SOL_RPC, {
     method: 'POST',
@@ -106,9 +106,39 @@ async function checkSolana(ownerAddress, since) {
   const results = [];
   const sinceTs = Math.floor(since / 1000);
 
+  // ── Native SOL transfers ──
+  try {
+    const sigs = await solRpc('getSignaturesForAddress', [ownerAddress, { limit: 20 }]);
+    for (const sig of (sigs || [])) {
+      if (sig.err) continue;
+      if ((sig.blockTime || 0) <= sinceTs) break;
+
+      const tx = await solRpc('getTransaction', [
+        sig.signature,
+        { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 },
+      ]);
+      if (!tx) continue;
+
+      const keys = tx.transaction?.message?.accountKeys || [];
+      const idx  = keys.findIndex(k => (k.pubkey || k) === ownerAddress);
+      if (idx === -1) continue;
+
+      const preLamports  = tx.meta?.preBalances?.[idx]  || 0;
+      const postLamports = tx.meta?.postBalances?.[idx] || 0;
+      const diffLamports = postLamports - preLamports;
+
+      if (diffLamports > 5000) { // > 0.000005 SOL (ignore dust / rent)
+        results.push({ txHash: sig.signature, symbol: 'SOL', cryptoAmount: diffLamports / 1e9, chain: 'Solana', network: 'SOL_MAINNET' });
+      }
+      await sleep(120);
+    }
+  } catch (e) { console.error('[Solana SOL] err:', e.message); }
+
+  await sleep(400);
+
+  // ── SPL token transfers (USDT / USDC) ──
   for (const [mint, symbol] of [[USDT_SOL, 'USDT'], [USDC_SOL, 'USDC']]) {
     try {
-      // Resolve associated token account for this owner + mint
       const taResult = await solRpc('getTokenAccountsByOwner', [
         ownerAddress,
         { mint },
@@ -117,7 +147,6 @@ async function checkSolana(ownerAddress, since) {
       const tokenAccount = taResult?.value?.[0]?.pubkey;
       if (!tokenAccount) continue;
 
-      // Get recent confirmed signatures for that token account
       const sigs = await solRpc('getSignaturesForAddress', [tokenAccount, { limit: 15 }]);
 
       for (const sig of (sigs || [])) {
@@ -130,7 +159,6 @@ async function checkSolana(ownerAddress, since) {
         ]);
         if (!tx) continue;
 
-        // Find balance change for our token account in this tx
         const pre  = tx.meta?.preTokenBalances?.find(b => b.mint === mint && b.owner === ownerAddress);
         const post = tx.meta?.postTokenBalances?.find(b => b.mint === mint && b.owner === ownerAddress);
         const diff = (post?.uiTokenAmount?.uiAmount || 0) - (pre?.uiTokenAmount?.uiAmount || 0);
@@ -143,6 +171,7 @@ async function checkSolana(ownerAddress, since) {
     } catch (e) { console.error(`[Solana ${symbol}] err:`, e.message); }
     await sleep(400);
   }
+
   return results;
 }
 
