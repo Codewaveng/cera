@@ -124,19 +124,61 @@ function watchEVMChain(chain) {
 }
 
 // ── Solana WebSocket watcher ───────────────────────────────────────────────
-// Uses logsSubscribe with {mentions:[address]} — fires on any tx that touches
-// the user's wallet, covering both native SOL and SPL token (USDT/USDC) receipts.
-const SOL_WS_URL = 'wss://api.mainnet-beta.solana.com';
-let _solWs = null;
-let _solReqId = 1;
-const _solPending = new Map(); // reqId → walletAddress
-const _solSubs    = new Map(); // subId  → walletAddress
+// Two parallel WS connections for redundancy — whichever fires first wins.
+// getTransaction races 3 HTTP RPCs simultaneously via Promise.any() so we
+// never wait on a single overloaded public node.
 
-function _subscribeAddr(addr) {
-  if (!_solWs || _solWs.readyState !== WebSocket.OPEN) return;
-  const id = _solReqId++;
-  _solPending.set(id, addr);
-  _solWs.send(JSON.stringify({
+// Connect to two independent WS endpoints — first logsNotification wins
+const SOL_WS_URLS = [
+  'wss://api.mainnet-beta.solana.com',
+  'wss://solana.publicnode.com',
+];
+
+// Three HTTP RPCs raced in parallel for getTransaction calls
+const SOL_HTTP_RPCS = [
+  'https://api.mainnet-beta.solana.com',
+  'https://rpc.ankr.com/solana',
+  'https://solana.publicnode.com',
+];
+
+// Deduplication — prevents double-processing when both WS connections fire
+const _processedSolTxs = new Set();
+
+// Per-WS state — each connection maintains its own pending/sub maps
+const _solConnections = new Map(); // wsUrl → { ws, pending, subs, reqId }
+
+// Race getTransaction across all HTTP RPCs; retry if all return null (tx not indexed yet)
+async function solFetchTx(sig, attempt = 0) {
+  const body = JSON.stringify({
+    jsonrpc: '2.0', id: 1,
+    method: 'getTransaction',
+    params: [sig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
+  });
+
+  const fetches = SOL_HTTP_RPCS.map(rpc =>
+    fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+      .then(r => r.json())
+      .then(j => { if (!j.result) throw new Error('null'); return j.result; })
+      .catch(err => Promise.reject(err))
+  );
+
+  try {
+    return await Promise.any(fetches); // first non-null result wins
+  } catch {
+    // All RPCs returned null — tx not indexed yet, retry with short backoff
+    if (attempt < 5) {
+      await new Promise(r => setTimeout(r, 300 + attempt * 200));
+      return solFetchTx(sig, attempt + 1);
+    }
+    return null;
+  }
+}
+
+function _subscribeAddrOnConn(conn, addr) {
+  if (!conn.ws || conn.ws.readyState !== WebSocket.OPEN) return;
+  const id = conn.reqId++;
+  conn.pending.set(id, addr);
+  conn.ws.send(JSON.stringify({
     jsonrpc: '2.0', id,
     method: 'logsSubscribe',
     params: [{ mentions: [addr] }, { commitment: 'confirmed' }],
@@ -145,100 +187,110 @@ function _subscribeAddr(addr) {
 
 // Expose so auth.js can subscribe new wallets the moment they're created
 function subscribeSOLAddress(addr) {
-  _subscribeAddr(addr);
+  for (const conn of _solConnections.values()) {
+    _subscribeAddrOnConn(conn, addr);
+  }
 }
 
-function watchSolana() {
-  async function connect() {
-    _solWs = new WebSocket(SOL_WS_URL);
+async function handleSolTx(txSig, addr) {
+  // Dedup across parallel WS connections
+  if (_processedSolTxs.has(txSig)) return;
+  _processedSolTxs.add(txSig);
+  setTimeout(() => _processedSolTxs.delete(txSig), 120_000);
 
-    _solWs.on('open', async () => {
-      console.log('[Solana] WS connected');
-      _solSubs.clear();
-      _solPending.clear();
+  const tx = await solFetchTx(txSig);
+  if (!tx) {
+    console.warn(`[Solana] getTransaction returned null after retries for ${txSig}`);
+    return;
+  }
+
+  const user = await User.findOne({ 'cryptoAddresses.sol': addr });
+  if (!user) return;
+
+  // Native SOL: check account balance diff
+  const keys = tx.transaction?.message?.accountKeys || [];
+  const idx  = keys.findIndex(k => (k.pubkey || k) === addr);
+  if (idx !== -1) {
+    const diff = (tx.meta?.postBalances?.[idx] || 0) - (tx.meta?.preBalances?.[idx] || 0);
+    if (diff > 5000) {
+      await processIncomingCrypto({
+        userId: user._id, cryptoAmount: diff / 1e9,
+        symbol: 'SOL', chain: 'Solana', network: 'SOL_MAINNET', txHash: txSig,
+      });
+      console.log(`⚡ [Solana] ${diff / 1e9} SOL → ${addr}`);
+    }
+  }
+
+  // SPL tokens (USDT / USDC)
+  for (const [mint, symbol] of [[USDT_SOL, 'USDT'], [USDC_SOL, 'USDC']]) {
+    const pre  = tx.meta?.preTokenBalances?.find(b => b.mint === mint && b.owner === addr);
+    const post = tx.meta?.postTokenBalances?.find(b => b.mint === mint && b.owner === addr);
+    const diff = (post?.uiTokenAmount?.uiAmount || 0) - (pre?.uiTokenAmount?.uiAmount || 0);
+    if (diff > 0.000001) {
+      await processIncomingCrypto({
+        userId: user._id, cryptoAmount: diff,
+        symbol, chain: 'Solana', network: 'SOL_MAINNET', txHash: txSig,
+      });
+      console.log(`⚡ [Solana] ${diff} ${symbol} → ${addr}`);
+    }
+  }
+}
+
+function watchSolanaEndpoint(wsUrl) {
+  const conn = { ws: null, pending: new Map(), subs: new Map(), reqId: 1 };
+  _solConnections.set(wsUrl, conn);
+
+  async function connect() {
+    conn.ws = new WebSocket(wsUrl);
+    conn.pending.clear();
+    conn.subs.clear();
+
+    conn.ws.on('open', async () => {
+      console.log(`[Solana] WS connected: ${wsUrl}`);
       const users = await User.find({ 'cryptoAddresses.sol': { $ne: null } }, 'cryptoAddresses.sol').lean();
-      for (const u of users) _subscribeAddr(u.cryptoAddresses.sol);
+      for (const u of users) _subscribeAddrOnConn(conn, u.cryptoAddresses.sol);
     });
 
-    _solWs.on('message', async (raw) => {
+    conn.ws.on('message', async (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
 
-        // Subscription confirmation
-        if (msg.result !== undefined && _solPending.has(msg.id)) {
-          _solSubs.set(msg.result, _solPending.get(msg.id));
-          _solPending.delete(msg.id);
+        if (msg.result !== undefined && conn.pending.has(msg.id)) {
+          conn.subs.set(msg.result, conn.pending.get(msg.id));
+          conn.pending.delete(msg.id);
           return;
         }
 
         if (msg.method !== 'logsNotification') return;
         const value = msg.params?.result?.value;
-        if (!value || value.err) return; // skip failed txns
+        if (!value || value.err) return;
 
-        const txSig  = value.signature;
-        const subId  = msg.params.subscription;
-        const addr   = _solSubs.get(subId);
+        const txSig = value.signature;
+        const addr  = conn.subs.get(msg.params.subscription);
         if (!addr || !txSig) return;
 
-        // Fetch full transaction to get exact amounts
-        const txRes = await fetch('https://api.mainnet-beta.solana.com', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0', id: 1,
-            method: 'getTransaction',
-            params: [txSig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }],
-          }),
-        });
-        const { result: tx } = await txRes.json();
-        if (!tx) return;
-
-        const user = await User.findOne({ 'cryptoAddresses.sol': addr });
-        if (!user) return;
-
-        // Native SOL: check account balance diff
-        const keys = tx.transaction?.message?.accountKeys || [];
-        const idx  = keys.findIndex(k => (k.pubkey || k) === addr);
-        if (idx !== -1) {
-          const diff = (tx.meta?.postBalances?.[idx] || 0) - (tx.meta?.preBalances?.[idx] || 0);
-          if (diff > 5000) { // > 0.000005 SOL (ignore fee/rent noise)
-            await processIncomingCrypto({
-              userId: user._id, cryptoAmount: diff / 1e9,
-              symbol: 'SOL', chain: 'Solana', network: 'SOL_MAINNET', txHash: txSig,
-            });
-            console.log(`⚡ [Solana] ${diff / 1e9} SOL → ${addr}`);
-          }
-        }
-
-        // SPL tokens (USDT / USDC): check token balance diff
-        for (const [mint, symbol] of [[USDT_SOL, 'USDT'], [USDC_SOL, 'USDC']]) {
-          const pre  = tx.meta?.preTokenBalances?.find(b => b.mint === mint && b.owner === addr);
-          const post = tx.meta?.postTokenBalances?.find(b => b.mint === mint && b.owner === addr);
-          const diff = (post?.uiTokenAmount?.uiAmount || 0) - (pre?.uiTokenAmount?.uiAmount || 0);
-          if (diff > 0.000001) {
-            await processIncomingCrypto({
-              userId: user._id, cryptoAmount: diff,
-              symbol, chain: 'Solana', network: 'SOL_MAINNET', txHash: txSig,
-            });
-            console.log(`⚡ [Solana] ${diff} ${symbol} → ${addr}`);
-          }
-        }
+        // Fire and forget — handleSolTx deduplicates across both connections
+        handleSolTx(txSig, addr).catch(e => console.error('[Solana] handler error:', e.message));
       } catch (e) {
-        console.error('[Solana] handler error:', e.message);
+        console.error(`[Solana:${wsUrl}] parse error:`, e.message);
       }
     });
 
-    _solWs.on('close', () => {
-      console.log('[Solana] WS closed — reconnecting in 5s');
+    conn.ws.on('close', () => {
+      console.log(`[Solana] WS closed (${wsUrl}) — reconnecting in 5s`);
       setTimeout(connect, 5000);
     });
 
-    _solWs.on('error', err => {
-      console.error('[Solana] WS error:', err.message);
+    conn.ws.on('error', err => {
+      console.error(`[Solana:${wsUrl}] WS error:`, err.message);
     });
   }
 
   connect();
+}
+
+function watchSolana() {
+  for (const url of SOL_WS_URLS) watchSolanaEndpoint(url);
 }
 
 // ── Keepalive — prevents Render free tier from spinning down ───────────────
