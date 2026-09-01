@@ -7,6 +7,7 @@ const cron = require('node-cron');
 
 const connectDB = require('./config/db');
 const { refreshRates } = require('./utils/coingecko');
+const { pollAllUsers } = require('./utils/chainPoller');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -31,6 +32,9 @@ connectDB();
 // Refresh rates on boot then every 2 minutes
 refreshRates();
 cron.schedule('*/2 * * * *', refreshRates);
+
+// Poll all chains every 5 minutes (free public APIs — no webhooks needed)
+cron.schedule('*/5 * * * *', pollAllUsers);
 
 // Routes
 app.use('/api/auth', authRoutes);

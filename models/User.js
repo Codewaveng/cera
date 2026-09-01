@@ -48,9 +48,13 @@ const userSchema = new mongoose.Schema({
   autoProcessing: {
     enabled: { type: Boolean, default: false },
     bankName: { type: String, default: null },
+    bankCode: { type: String, default: null },
     accountNumber: { type: String, default: null },
     accountName: { type: String, default: null },
   },
+
+  // Timestamp of last on-chain poll (used by chainPoller to fetch only new txs)
+  lastTxCheck: { type: Date, default: null },
 
   // Real on-chain wallet addresses (created via Turnkey on signup)
   turnkeyWalletId: { type: String, default: null },
