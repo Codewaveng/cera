@@ -2,16 +2,14 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { processIncomingCrypto } = require('./processPayment');
 
-const ETHERSCAN_KEY   = process.env.ETHERSCAN_API_KEY   || '';
-const BSCSCAN_KEY     = process.env.BSCSCAN_API_KEY     || '';
-const POLYGONSCAN_KEY = process.env.POLYGONSCAN_API_KEY || '';
-const TRONGRID_KEY    = process.env.TRONGRID_API_KEY    || '';
+const TRONGRID_KEY = process.env.TRONGRID_API_KEY || '';
+
+// Etherscan API V2 — one key covers all 60+ EVM chains
+const ETHERSCAN_V2 = 'https://api.etherscan.io/v2/api';
 
 const EVM_CHAINS = [
   {
-    name: 'Ethereum', network: 'ETH_MAINNET',
-    apiUrl: 'https://api.etherscan.io/api',
-    get apiKey() { return process.env.ETHERSCAN_API_KEY || ''; },
+    name: 'Ethereum', network: 'ETH_MAINNET', chainId: 1,
     nativeSymbol: 'ETH',
     tokens: {
       '0xdac17f958d2ee523a2206206994597c13d831ec7': { symbol: 'USDT', decimals: 6 },
@@ -19,9 +17,7 @@ const EVM_CHAINS = [
     },
   },
   {
-    name: 'BNB Smart Chain', network: 'BNB_MAINNET',
-    apiUrl: 'https://api.bscscan.com/api',
-    get apiKey() { return process.env.BSCSCAN_API_KEY || ''; },
+    name: 'BNB Smart Chain', network: 'BNB_MAINNET', chainId: 56,
     nativeSymbol: 'BNB',
     tokens: {
       '0x55d398326f99059ff775485246999027b3197955': { symbol: 'USDT', decimals: 18 },
@@ -29,9 +25,7 @@ const EVM_CHAINS = [
     },
   },
   {
-    name: 'Polygon', network: 'MATIC_MAINNET',
-    apiUrl: 'https://api.polygonscan.com/api',
-    get apiKey() { return process.env.POLYGONSCAN_API_KEY || ''; },
+    name: 'Polygon', network: 'MATIC_MAINNET', chainId: 137,
     nativeSymbol: 'MATIC',
     tokens: {
       '0xc2132d05d31c914a87c6611c10748aeb04b58e8f': { symbol: 'USDT', decimals: 6 },
@@ -48,17 +42,21 @@ const TRON_USDC   = 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8';
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── EVM (ETH / BNB / Polygon) ──────────────────────────────────────────────
+// ── EVM (ETH / BNB / Polygon) — Etherscan API V2, one key for all chains ──
+function ethV2Url(chainId, params) {
+  const key = process.env.ETHERSCAN_API_KEY || '';
+  const qs  = new URLSearchParams({ chainid: chainId, apikey: key, ...params }).toString();
+  return `${ETHERSCAN_V2}?${qs}`;
+}
+
 async function checkEVMChain(address, chain, since) {
   const results = [];
   const sinceTs = Math.floor(since / 1000);
   const addr    = address.toLowerCase();
 
-  // ERC-20 token transfers
+  // ERC-20 token transfers (USDT / USDC)
   try {
-    const r = await fetch(
-      `${chain.apiUrl}?module=account&action=tokentx&address=${address}&sort=desc&apikey=${chain.apiKey}`
-    );
+    const r = await fetch(ethV2Url(chain.chainId, { module: 'account', action: 'tokentx', address, sort: 'desc' }));
     const d = await r.json();
     if (d.status === '1') {
       for (const tx of (d.result || [])) {
@@ -75,11 +73,9 @@ async function checkEVMChain(address, chain, since) {
 
   await sleep(350);
 
-  // Native coin transfers
+  // Native coin transfers (ETH / BNB / MATIC)
   try {
-    const r = await fetch(
-      `${chain.apiUrl}?module=account&action=txlist&address=${address}&sort=desc&apikey=${chain.apiKey}`
-    );
+    const r = await fetch(ethV2Url(chain.chainId, { module: 'account', action: 'txlist', address, sort: 'desc' }));
     const d = await r.json();
     if (d.status === '1') {
       for (const tx of (d.result || [])) {
