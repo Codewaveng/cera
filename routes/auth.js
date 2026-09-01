@@ -4,6 +4,7 @@ const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
 const { generateCeraId } = require('../utils/helpers');
 const { createUserWallet } = require('../utils/turnkey');
+const { registerEVMAddress, registerSolanaAddress, registerBTCAddress } = require('../utils/monitor');
 
 function signToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' });
@@ -31,9 +32,15 @@ router.post('/register', async (req, res) => {
     // Create real Turnkey wallets in the background — don't block registration
     createUserWallet(user._id.toString())
       .then(async ({ walletId, evm, sol, btc }) => {
-        user.turnkeyWalletId    = walletId;
-        user.cryptoAddresses    = { evm, sol, btc };
+        user.turnkeyWalletId = walletId;
+        user.cryptoAddresses = { evm, sol, btc };
         await user.save();
+        // Start monitoring all 3 addresses immediately
+        await Promise.all([
+          registerEVMAddress(evm),
+          registerSolanaAddress(sol),
+          registerBTCAddress(btc),
+        ]);
       })
       .catch((err) => console.error('Turnkey wallet creation failed:', err.message));
 

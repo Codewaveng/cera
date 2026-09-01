@@ -1,0 +1,141 @@
+const User        = require('../models/User');
+const Transaction = require('../models/Transaction');
+const { getRateForCoin } = require('./coingecko');
+
+// ERC-20 / SPL token contract → symbol mapping
+const TOKEN_MAP = {
+  // Ethereum mainnet
+  '0xdac17f958d2ee523a2206206994597c13d831ec7': 'USDT',
+  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
+  // Polygon mainnet
+  '0xc2132d05d31c914a87c6611c10748aeb04b58e8f': 'USDT',
+  '0x2791bca1f2de4661ed88a30c99a7a9449aa84174': 'USDC',
+  // BNB Smart Chain
+  '0x55d398326f99059ff775485246999027b3197955': 'USDT',
+  '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d': 'USDC',
+  // Solana SPL (mint addresses)
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+};
+
+// Core: convert crypto → Naira then credit balance or auto-process to bank
+async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHash, network }) {
+  // Prevent duplicate processing
+  const existing = await Transaction.findOne({ txHash });
+  if (existing) return;
+
+  const rate = getRateForCoin(symbol);
+  if (!rate || !rate.priceNGN) {
+    console.error(`No rate found for ${symbol}`);
+    return;
+  }
+
+  const nairaAmount = cryptoAmount * rate.priceNGN;
+  const nairaKobo   = Math.round(nairaAmount * 100);
+
+  const user = await User.findById(userId);
+  if (!user) return;
+
+  const auto = user.autoProcessing;
+
+  if (auto?.enabled && auto?.accountNumber && auto?.bankCode) {
+    // ── AUTO-PROCESSING: fire bank transfer immediately ──
+    const payout = await triggerBankPayout({
+      accountNumber: auto.accountNumber,
+      bankCode:      auto.bankCode,
+      accountName:   auto.accountName,
+      amountKobo:    nairaKobo,
+      narration:     `CERA Auto: ${cryptoAmount} ${symbol} on ${chain}`,
+    });
+
+    await Transaction.create({
+      txId:          generateTxId(),
+      txHash,
+      type:          'bank_payout',
+      fromUser:      user._id,
+      toUser:        user._id,
+      amountKobo:    nairaKobo,
+      feeKobo:       0,
+      narration:     `Auto-processed ${cryptoAmount} ${symbol} → ₦${nairaAmount.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`,
+      coin:          symbol,
+      chain,
+      network,
+      cryptoAmount,
+      rateUsed:      rate.priceNGN,
+      bankName:      auto.bankName,
+      accountNumber: auto.accountNumber,
+      status:        payout.success ? 'completed' : 'pending',
+    });
+
+    console.log(`⚡ Auto-processed ${cryptoAmount} ${symbol} for user ${user.ceraTag || user.ceraId}`);
+
+  } else {
+    // ── MANUAL: credit Naira balance ──
+    user.balanceKobo = (user.balanceKobo || 0) + nairaKobo;
+    await user.save();
+
+    await Transaction.create({
+      txId:        generateTxId(),
+      txHash,
+      type:        'funding',
+      toUser:      user._id,
+      amountKobo:  nairaKobo,
+      feeKobo:     0,
+      narration:   `${cryptoAmount} ${symbol} received on ${chain}`,
+      coin:        symbol,
+      chain,
+      network,
+      cryptoAmount,
+      rateUsed:    rate.priceNGN,
+      status:      'completed',
+    });
+
+    console.log(`💰 Credited ₦${nairaAmount.toFixed(2)} to user ${user.ceraTag || user.ceraId}`);
+  }
+}
+
+async function triggerBankPayout({ accountNumber, bankCode, accountName, amountKobo, narration }) {
+  try {
+    const recipientRes = await fetch('https://api.paystack.co/transferrecipient', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type:           'nuban',
+        name:           accountName,
+        account_number: accountNumber,
+        bank_code:      bankCode,
+        currency:       'NGN',
+      }),
+    });
+    const { data: recipient } = await recipientRes.json();
+    if (!recipient?.recipient_code) throw new Error('Recipient creation failed');
+
+    const transferRes = await fetch('https://api.paystack.co/transfer', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        source:    'balance',
+        amount:    amountKobo,
+        recipient: recipient.recipient_code,
+        reason:    narration,
+      }),
+    });
+    const transfer = await transferRes.json();
+    return { success: transfer.status === true };
+  } catch (err) {
+    console.error('Paystack transfer failed:', err.message);
+    return { success: false };
+  }
+}
+
+function generateTxId() {
+  return 'TXN-' + Math.random().toString(36).slice(2, 12).toUpperCase();
+}
+
+module.exports = { processIncomingCrypto, TOKEN_MAP };
