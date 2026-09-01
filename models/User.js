@@ -52,14 +52,15 @@ const userSchema = new mongoose.Schema({
     accountName: { type: String, default: null },
   },
 
-  // Demo crypto addresses (static placeholders for now)
+  // Real on-chain wallet addresses (created via Turnkey on signup)
+  turnkeyWalletId: { type: String, default: null },
   cryptoAddresses: {
-    btc:  { type: String, default: null },
-    eth:  { type: String, default: null },
-    sol:  { type: String, default: null },
-    bnb:  { type: String, default: null },
-    usdt: { type: String, default: null },
-    usdc: { type: String, default: null },
+    evm: { type: String, default: null }, // ETH + Polygon + BNB + Sei (same address)
+    sol: { type: String, default: null }, // Solana
+    btc: { type: String, default: null }, // Bitcoin
+    ton: { type: String, default: null }, // TON (future)
+    sui: { type: String, default: null }, // Sui (future)
+    stx: { type: String, default: null }, // Stacks (future)
   },
 }, { timestamps: true });
 
@@ -99,6 +100,7 @@ userSchema.methods.toPublic = function () {
     kycStatus: this.kycStatus,
     autoProcessing: this.autoProcessing,
     cryptoAddresses: this.cryptoAddresses,
+    walletsReady: !!(this.cryptoAddresses?.evm),
     createdAt: this.createdAt,
   };
 };

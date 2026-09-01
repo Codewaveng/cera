@@ -2,7 +2,8 @@ const router = require('express').Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
-const { generateCeraId, generateDemoAddresses } = require('../utils/helpers');
+const { generateCeraId } = require('../utils/helpers');
+const { createUserWallet } = require('../utils/turnkey');
 
 function signToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' });
@@ -22,11 +23,19 @@ router.post('/register', async (req, res) => {
     const exists = await User.findOne({ email: email.toLowerCase().trim() });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
 
-    const count = await User.countDocuments();
     const ceraId = generateCeraId();
-    const cryptoAddresses = generateDemoAddresses(count + 1);
 
-    const user = await User.create({ name, email, phone, password, ceraId, cryptoAddresses });
+    // Create user first so we have their _id for the wallet name
+    const user = await User.create({ name, email, phone, password, ceraId });
+
+    // Create real Turnkey wallets in the background — don't block registration
+    createUserWallet(user._id.toString())
+      .then(async ({ walletId, evm, sol, btc }) => {
+        user.turnkeyWalletId    = walletId;
+        user.cryptoAddresses    = { evm, sol, btc };
+        await user.save();
+      })
+      .catch((err) => console.error('Turnkey wallet creation failed:', err.message));
 
     res.status(201).json({
       token: signToken(user._id),
