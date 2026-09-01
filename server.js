@@ -8,6 +8,7 @@ const cron = require('node-cron');
 const connectDB = require('./config/db');
 const { refreshRates } = require('./utils/coingecko');
 const { pollAllUsers } = require('./utils/chainPoller');
+const { startWatchers } = require('./utils/blockchainWatcher');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -33,8 +34,11 @@ connectDB();
 refreshRates();
 cron.schedule('*/2 * * * *', refreshRates);
 
-// Poll all chains every 5 minutes (free public APIs — no webhooks needed)
+// Poll all chains every 5 minutes as a safety net (WebSocket watchers handle real-time)
 cron.schedule('*/5 * * * *', pollAllUsers);
+
+// Start real-time WebSocket watchers (instant detection via public RPC nodes)
+startWatchers();
 
 // Routes
 app.use('/api/auth', authRoutes);

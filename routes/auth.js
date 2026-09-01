@@ -6,6 +6,7 @@ const { generateCeraId } = require('../utils/helpers');
 const { createUserWallet } = require('../utils/turnkey');
 const { registerBTCAddress } = require('../utils/monitor');
 const { evmToTron } = require('../utils/chainPoller');
+const { addEVMAddress, subscribeSOLAddress } = require('../utils/blockchainWatcher');
 
 function signToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' });
@@ -36,8 +37,11 @@ router.post('/register', async (req, res) => {
         user.turnkeyWalletId = walletId;
         user.cryptoAddresses = { evm, sol, btc, tron: evmToTron(evm) };
         await user.save();
-        // Register BTC for real-time webhook; EVM/SOL/TRON are polled automatically
+        // BTC: real-time via BlockCypher webhook
         await registerBTCAddress(btc);
+        // EVM/Solana: add to live WebSocket watchers for instant detection
+        addEVMAddress(evm);
+        subscribeSOLAddress(sol);
       })
       .catch((err) => console.error('Turnkey wallet creation failed:', err.message));
 
