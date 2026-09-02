@@ -587,12 +587,6 @@ function Hero() {
       <div style={{ maxWidth:1140, margin:'0 auto', padding:'60px 24px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center', width:'100%', position:'relative', zIndex:1 }} className="hero-grid">
         {/* Left */}
         <div style={{ animation:'fadeInLeft 0.65s ease forwards' }}>
-          {/* Live badge */}
-          <div style={{ display:'inline-flex', alignItems:'center', gap:7, background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:999, padding:'6px 14px', marginBottom:24 }}>
-            <div style={{ width:7, height:7, borderRadius:'50%', background:'#10B981', flexShrink:0 }} className="animate-pulse-dot" />
-            <span style={{ fontSize:12, fontWeight:600, color:'#059669' }}>Instant detection · Live rates · No signup</span>
-          </div>
-
           {/* Headline */}
           <h1 style={{ fontWeight:800, fontSize:'clamp(44px,5.8vw,76px)', lineHeight:1.05, color:'#0F172A', letterSpacing:'-0.03em', marginBottom:20 }}>
             Convert Crypto<br />
@@ -605,7 +599,7 @@ function Hero() {
           </p>
 
           {/* CTAs */}
-          <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:48 }}>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
             <a href="#widget" style={{ textDecoration:'none' }}>
               <button style={{ background:'#4F46E5', color:'#fff', fontWeight:700, fontSize:'0.97rem', padding:'14px 30px', borderRadius:12, border:'none', cursor:'pointer', boxShadow:'0 4px 20px rgba(79,70,229,0.32)', transition:'all 0.22s', fontFamily:'Plus Jakarta Sans', whiteSpace:'nowrap' }}
                 onMouseEnter={e => { e.currentTarget.style.background='#4338CA'; e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 8px 28px rgba(79,70,229,0.42)' }}
@@ -617,24 +611,14 @@ function Hero() {
               <button className="btn-outline">Download App</button>
             </a>
           </div>
-
-          {/* Trust badges */}
-          <div style={{ display:'flex', gap:20, flexWrap:'wrap' }}>
-            {[['< 3s','Detection'],['8 Coins','Supported'],['12+ Chains','Available']].map(([v, l]) => (
-              <div key={l} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ width:8, height:8, borderRadius:'50%', background:'#10B981', flexShrink:0 }} />
-                <span style={{ fontSize:13, color:'#64748B', fontWeight:500 }}><strong style={{ color:'#0F172A' }}>{v}</strong> {l}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Right — phone */}
         <div style={{ display:'flex', justifyContent:'center', alignItems:'center', animation:'fadeInRight 0.65s ease 0.15s both' }}>
           <div style={{ position:'relative' }}>
             <div style={{ position:'absolute', inset:'-32px', background:'radial-gradient(ellipse, rgba(79,70,229,0.12) 0%, transparent 70%)', borderRadius:'50%', zIndex:0 }} />
-            <img src="/phone.jpg" alt="CERA App" className="animate-float"
-              style={{ width:'100%', maxWidth:290, borderRadius:28, boxShadow:'0 32px 80px rgba(79,70,229,0.20), 0 8px 24px rgba(0,0,0,0.08)', position:'relative', zIndex:1, display:'block' }} />
+            <img src="/phone.png" alt="CERA App" className="animate-float"
+              style={{ width:'100%', maxWidth:290, position:'relative', zIndex:1, display:'block' }} />
           </div>
         </div>
       </div>
@@ -787,50 +771,22 @@ function CoinTicker() {
 
 function AdsSection() {
   return (
-    <section style={{ padding:'96px 24px', background:'#fff', borderTop:'1px solid #F1F5F9' }}>
-      <div style={{ maxWidth:1140, margin:'0 auto' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center' }} className="hero-grid">
-          {/* Image */}
-          <div className="reveal" style={{ position:'relative', borderRadius:24, overflow:'hidden', boxShadow:'0 24px 60px rgba(79,70,229,0.14)' }}>
-            <img
-              src="/ads.png"
-              alt="People using CERA"
-              style={{ width:'100%', height:'auto', display:'block', borderRadius:24 }}
-            />
-            {/* Floating badge */}
-            <div style={{ position:'absolute', bottom:20, left:20, background:'rgba(255,255,255,0.96)', backdropFilter:'blur(12px)', borderRadius:14, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, boxShadow:'0 4px 20px rgba(0,0,0,0.12)' }}>
-              <div style={{ width:36, height:36, borderRadius:10, background:'#D1FAE5', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <IcZap style={{ color:'#10B981' }} />
-              </div>
-              <div>
-                <div style={{ fontWeight:800, fontSize:14, color:'#0F172A', lineHeight:1 }}>Naira in seconds</div>
-                <div style={{ fontSize:12, color:'#64748B', marginTop:3 }}>Instant bank transfer</div>
-              </div>
+    <section style={{ padding:'80px 24px', background:'#FAFBFF', borderTop:'1px solid #F1F5F9' }}>
+      <div style={{ maxWidth:900, margin:'0 auto' }}>
+        <div className="reveal" style={{ position:'relative', borderRadius:24, overflow:'hidden', boxShadow:'0 24px 70px rgba(79,70,229,0.13)' }}>
+          <img
+            src="/ads.png"
+            alt="People using CERA"
+            style={{ width:'100%', height:'auto', display:'block' }}
+          />
+          {/* Floating badge — Naira in seconds */}
+          <div style={{ position:'absolute', bottom:24, left:24, background:'rgba(255,255,255,0.97)', backdropFilter:'blur(16px)', borderRadius:16, padding:'14px 18px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 8px 32px rgba(0,0,0,0.14)' }}>
+            <div style={{ width:40, height:40, borderRadius:12, background:'#D1FAE5', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#10B981' }}>
+              <IcZap />
             </div>
-          </div>
-
-          {/* Text */}
-          <div className="reveal delay-2">
-            <span className="section-label">Real People. Real Results.</span>
-            <h2 style={{ fontWeight:800, fontSize:'clamp(28px,3.8vw,44px)', color:'#0F172A', marginTop:10, letterSpacing:'-0.02em', lineHeight:1.15 }}>
-              Crypto in your pocket,{' '}
-              <span className="mark">Naira in your bank.</span>
-            </h2>
-            <p style={{ color:'#64748B', marginTop:16, fontSize:16, lineHeight:1.8, maxWidth:420 }}>
-              Thousands of Nigerians are already converting crypto to Naira on CERA — no middlemen, no delays, no stress.
-            </p>
-
-            <div style={{ marginTop:28, display:'flex', flexDirection:'column', gap:16 }}>
-              {[
-                { q:'"Received my Naira in literally 3 seconds. I thought it was a glitch."', name:'Emeka A., Lagos' },
-                { q:'"Finally stopped using P2P with its drama. CERA just works."',            name:'Tolu R., Abuja' },
-                { q:'"Used it to cash out USDT on a Sunday night. Arrived instantly."',        name:'Chioma N., PH' },
-              ].map(({ q, name }) => (
-                <div key={name} style={{ background:'#FAFBFF', border:'1px solid #EEF2FF', borderRadius:14, padding:'14px 18px' }}>
-                  <p style={{ fontSize:14, color:'#374151', lineHeight:1.65, fontStyle:'italic' }}>{q}</p>
-                  <p style={{ fontSize:12, color:'#94A3B8', fontWeight:600, marginTop:8 }}>— {name}</p>
-                </div>
-              ))}
+            <div>
+              <div style={{ fontWeight:800, fontSize:15, color:'#0F172A', lineHeight:1 }}>Naira in seconds</div>
+              <div style={{ fontSize:12, color:'#64748B', marginTop:4 }}>Instant bank transfer · No delays</div>
             </div>
           </div>
         </div>
@@ -856,19 +812,29 @@ function Download() {
             <p style={{ color:'rgba(255,255,255,0.72)', lineHeight:1.75, marginBottom:32, fontSize:15, maxWidth:420 }}>
               Saved bank details, transaction history, auto-processing and higher daily limits. Convert on autopilot.
             </p>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-              <a href="#" className="store-badge">
-                <IcApple />
-                <div><div style={{ fontSize:'0.62rem', opacity:0.6, lineHeight:1 }}>Download on the</div><div style={{ fontSize:'1rem', fontWeight:700, lineHeight:1.25 }}>App Store</div></div>
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'center' }}>
+              <a href="#" style={{ display:'inline-block', textDecoration:'none', transition:'transform 0.2s,opacity 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.opacity='0.92' }}
+                onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.opacity='1' }}>
+                <img
+                  src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83"
+                  alt="Download on the App Store"
+                  style={{ height:50, display:'block', borderRadius:8 }}
+                />
               </a>
-              <a href="#" className="store-badge">
-                <IcGPlay />
-                <div><div style={{ fontSize:'0.62rem', opacity:0.6, lineHeight:1 }}>Get it on</div><div style={{ fontSize:'1rem', fontWeight:700, lineHeight:1.25 }}>Google Play</div></div>
+              <a href="#" style={{ display:'inline-block', textDecoration:'none', transition:'transform 0.2s,opacity 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.opacity='0.92' }}
+                onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.opacity='1' }}>
+                <img
+                  src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                  alt="Get it on Google Play"
+                  style={{ height:72, display:'block', marginTop:-10, marginBottom:-10 }}
+                />
               </a>
             </div>
           </div>
           <div className="download-phone" style={{ position:'relative', zIndex:1 }}>
-            <img src="/phone.jpg" alt="CERA App" style={{ width:210, borderRadius:24, boxShadow:'0 24px 60px rgba(0,0,0,0.4)', transform:'rotate(2deg)', display:'block' }} />
+            <img src="/phone.png" alt="CERA App" style={{ width:210, display:'block' }} />
           </div>
         </div>
       </div>
