@@ -1,15 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-// ─── Data ───────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const COINS = [
-  { symbol: 'BTC',  name: 'Bitcoin',   icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/btc.svg' },
-  { symbol: 'ETH',  name: 'Ethereum',  icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/eth.svg' },
-  { symbol: 'BNB',  name: 'BNB',       icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/bnb.svg' },
-  { symbol: 'SOL',  name: 'Solana',    icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/sol.svg' },
-  { symbol: 'TRX',  name: 'TRON',      icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/trx.svg' },
-  { symbol: 'USDT', name: 'Tether',    icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/usdt.svg' },
-  { symbol: 'USDC', name: 'USD Coin',  icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/usdc.svg' },
+  { symbol: 'BTC',  name: 'Bitcoin',  icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/btc.svg' },
+  { symbol: 'ETH',  name: 'Ethereum', icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/eth.svg' },
+  { symbol: 'BNB',  name: 'BNB',      icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/bnb.svg' },
+  { symbol: 'SOL',  name: 'Solana',   icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/sol.svg' },
+  { symbol: 'TRX',  name: 'TRON',     icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/trx.svg' },
+  { symbol: 'USDT', name: 'USDT',     icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/usdt.svg' },
+  { symbol: 'USDC', name: 'USDC',     icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/usdc.svg' },
+]
+
+const SWAP_COINS = [
+  ...COINS,
+  { symbol: 'MATIC', name: 'Polygon',  icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/matic.svg' },
+  { symbol: 'LTC',   name: 'Litecoin', icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/ltc.svg' },
+  { symbol: 'XRP',   name: 'XRP',      icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/xrp.svg' },
+  { symbol: 'DOGE',  name: 'Dogecoin', icon: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/doge.svg' },
 ]
 
 const BANKS = [
@@ -36,1050 +44,776 @@ const STABLECOIN_CHAINS = {
   USDC: ['ETH', 'BNB', 'Polygon', 'Solana'],
 }
 
-const STATUS_ORDER = ['waiting', 'detected', 'processing', 'completed']
-const SWAP_STATUS_ORDER = ['waiting_for_deposit', 'confirming', 'exchanging', 'sending', 'finished']
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatNaira(amount) {
-  if (!amount || isNaN(amount)) return '₦0'
-  return '₦' + Number(amount).toLocaleString('en-NG', { maximumFractionDigits: 2 })
+function formatNaira(n) {
+  if (!n || isNaN(n)) return '₦0'
+  return '₦' + Number(n).toLocaleString('en-NG', { maximumFractionDigits: 2 })
 }
 
-function formatTimer(seconds) {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0')
-  const s = (seconds % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
+function formatTimer(s) {
+  return `${Math.floor(s / 60).toString().padStart(2,'0')}:${(s % 60).toString().padStart(2,'0')}`
 }
 
-// ─── SVG Icons ───────────────────────────────────────────────────────────────
-
-function IconCopy() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-    </svg>
-  )
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll('.reveal')
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target) } })
+    }, { threshold: 0.15 })
+    els.forEach(el => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
 }
 
-function IconCheck() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  )
-}
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
-function IconArrowDown() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19"/>
-      <polyline points="19 12 12 19 5 12"/>
-    </svg>
-  )
-}
-
-function IconRefresh() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10"/>
-      <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-    </svg>
-  )
-}
+const IconCopy  = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+const IconCheck = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+const IconArrow = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16l-4-4 4-4M17 8l4 4-4 4M14 4l-4 16"/></svg>
+const IconApple = () => (
+  <svg width="24" height="24" viewBox="0 0 814 1000" fill="white">
+    <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-43.4-150.3-112.7C172.5 672.4 124.5 548.1 124.5 430c0-194.3 125.4-297.5 248.1-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99zM554.1 158.6c27.6-34.4 47.7-82.4 47.7-130.4 0-6.5-.6-13-1.9-18.2-45.1 1.9-98.3 30.3-131 68.7-27.7 33.1-50.8 81.1-50.8 130.4 0 7.1 1.3 14.3 1.9 16.5 2.6.4 6.5.6 10.4.6 40.8 0 91.6-27.1 123.7-67.6z"/>
+  </svg>
+)
+const IconPlay = () => (
+  <svg width="22" height="22" viewBox="0 0 512 512" fill="white">
+    <path d="M99.617 8.057a50.191 50.191 0 00-38.815-6.713l230.932 230.933 74.846-74.846L99.617 8.057zM32.139 20.116c-6.441 8.563-10.148 19.077-10.148 30.199v411.358c0 11.123 3.708 21.636 10.148 30.199l235.877-235.877L32.139 20.116zM464.261 212.087l-67.066-38.731-81.002 81.002 81.002 81.002 67.765-39.186c19.167-11.077 19.167-74.086-.699-84.087zM236.placement 461.674L5.708 691.674c11.031 3.657 22.954 3.53 34.383-.323L415.16 482.72l-178.84-20.746z"/>
+  </svg>
+)
+const IconSpinner = () => <div style={{width:20,height:20,border:'2.5px solid rgba(255,255,255,0.3)',borderTop:'2.5px solid #fff',borderRadius:'50%'}} className="animate-spin-slow"/>
 
 // ─── CopyButton ──────────────────────────────────────────────────────────────
 
-function CopyButton({ text }) {
+function CopyButton({ text, dark }) {
   const [copied, setCopied] = useState(false)
   const copy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
   return (
-    <button
-      onClick={copy}
-      style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, padding: '6px 10px', color: copied ? '#10B981' : '#7C3AED', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, transition: 'all 0.2s' }}
-    >
-      {copied ? <IconCheck /> : <IconCopy />}
-      {copied ? 'Copied' : 'Copy'}
+    <button onClick={copy} style={{
+      background: dark ? 'rgba(255,255,255,0.15)' : 'rgba(79,70,229,0.1)',
+      border: dark ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(79,70,229,0.2)',
+      borderRadius: 8, padding: '6px 12px',
+      color: copied ? '#10B981' : dark ? '#fff' : '#4F46E5',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+      fontSize: 13, fontWeight: 600, fontFamily: 'DM Sans', transition: 'all 0.2s'
+    }}>
+      {copied ? <IconCheck /> : <IconCopy />} {copied ? 'Copied!' : 'Copy'}
     </button>
   )
 }
 
 // ─── CoinSelect ──────────────────────────────────────────────────────────────
 
-function CoinSelect({ value, onChange, coins }) {
+function CoinSelect({ value, onChange, coins, style }) {
   return (
-    <div style={{ position: 'relative', minWidth: 130 }}>
-      <select
-        className="input-field"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{ paddingLeft: '2.5rem', appearance: 'none', cursor: 'pointer' }}
-      >
-        {coins.map(c => (
-          <option key={c.symbol} value={c.symbol}>{c.symbol} — {c.name}</option>
-        ))}
+    <div style={{ position: 'relative', ...style }}>
+      <select className="input-field" value={value} onChange={e => onChange(e.target.value)}
+        style={{ paddingLeft: '2.6rem', paddingRight: '1.5rem', appearance: 'none', cursor: 'pointer', fontWeight: 600 }}>
+        {coins.map(c => <option key={c.symbol} value={c.symbol}>{c.symbol} — {c.name}</option>)}
       </select>
-      <img
-        src={coins.find(c => c.symbol === value)?.icon}
-        alt=""
-        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, pointerEvents: 'none' }}
-      />
+      <img src={coins.find(c => c.symbol === value)?.icon} alt="" style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', width:20, height:20, pointerEvents:'none' }} />
     </div>
   )
 }
 
-// ─── StatusBadge ─────────────────────────────────────────────────────────────
+// ─── StatusDot ───────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }) {
-  const map = {
-    waiting:            { label: 'Waiting',     bg: 'rgba(251,191,36,0.15)',  color: '#FBBf24' },
-    detected:           { label: 'Detected',    bg: 'rgba(59,130,246,0.15)', color: '#3B82F6' },
-    processing:         { label: 'Processing',  bg: 'rgba(139,92,246,0.15)', color: '#8B5CF6' },
-    completed:          { label: 'Completed',   bg: 'rgba(16,185,129,0.15)', color: '#10B981' },
-    waiting_for_deposit:{ label: 'Awaiting',    bg: 'rgba(251,191,36,0.15)', color: '#FBBf24' },
-    confirming:         { label: 'Confirming',  bg: 'rgba(59,130,246,0.15)', color: '#3B82F6' },
-    exchanging:         { label: 'Exchanging',  bg: 'rgba(139,92,246,0.15)', color: '#8B5CF6' },
-    sending:            { label: 'Sending',     bg: 'rgba(16,185,129,0.1)',  color: '#10B981' },
-    finished:           { label: 'Finished',    bg: 'rgba(16,185,129,0.15)', color: '#10B981' },
-    failed:             { label: 'Failed',      bg: 'rgba(239,68,68,0.15)',  color: '#EF4444' },
-    expired:            { label: 'Expired',     bg: 'rgba(107,114,128,0.2)', color: '#6B7280' },
-  }
-  const s = map[status] || { label: status, bg: 'rgba(255,255,255,0.05)', color: '#6B7280' }
+function StatusDot({ status }) {
+  const colors = { waiting:'#F59E0B', detected:'#3B82F6', processing:'#8B5CF6', completed:'#10B981', waiting_for_deposit:'#F59E0B', confirming:'#3B82F6', exchanging:'#8B5CF6', sending:'#10B981', finished:'#10B981', failed:'#EF4444', expired:'#6B7280' }
+  const labels = { waiting:'Waiting for payment', detected:'Payment detected', processing:'Processing payout', completed:'Naira sent', waiting_for_deposit:'Waiting for deposit', confirming:'Confirming', exchanging:'Exchanging', sending:'Sending to you', finished:'Complete', failed:'Failed', expired:'Expired' }
+  const c = colors[status] || '#6B7280'
   return (
-    <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600, letterSpacing: 0.3, display: 'inline-block' }}>
-      {s.label}
-    </span>
+    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      <div style={{ width:10, height:10, borderRadius:'50%', background:c, boxShadow:`0 0 0 3px ${c}30` }} className={['waiting','waiting_for_deposit','confirming','exchanging','processing','sending','detected'].includes(status) ? 'animate-pulse-dot' : ''} />
+      <span style={{ fontSize:14, fontWeight:600, color:c }}>{labels[status] || status}</span>
+    </div>
   )
 }
 
-// ─── StepIndicator ───────────────────────────────────────────────────────────
+// ─── DepositCard ─────────────────────────────────────────────────────────────
 
-function StepIndicator({ steps, current }) {
+function DepositCard({ address, coin, amount, timer, status, onDone, type }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 24 }}>
-      {steps.map((step, i) => {
-        const idx = steps.indexOf(current)
-        const done = i < idx
-        const active = step === current
-        return (
-          <div key={step} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: done ? '#10B981' : active ? 'linear-gradient(135deg,#7C3AED,#3B82F6)' : 'rgba(255,255,255,0.07)',
-                border: active ? 'none' : done ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700, color: done || active ? '#fff' : '#6B7280',
-                transition: 'all 0.3s',
-              }}>
-                {done ? <IconCheck /> : i + 1}
-              </div>
-              <span style={{ fontSize: 10, color: active ? '#F9FAFB' : '#4B5563', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
-                {step.replace(/_/g, ' ')}
-              </span>
-            </div>
-            {i < steps.length - 1 && (
-              <div style={{ height: 1, flex: 1, background: i < steps.indexOf(current) ? '#10B981' : 'rgba(255,255,255,0.07)', transition: 'background 0.3s', marginBottom: 18 }} />
-            )}
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      <div style={{ textAlign:'center' }}>
+        <StatusDot status={status} />
+      </div>
+
+      {status !== 'completed' && status !== 'finished' && (
+        <>
+          <div style={{ background:'#F5F3FF', borderRadius:16, padding:20 }}>
+            <p style={{ fontSize:12, color:'#6B7280', marginBottom:6, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em' }}>Send exactly</p>
+            <p style={{ fontSize:26, fontWeight:700, color:'#111827', fontFamily:'DM Sans' }}>
+              {amount ? `${amount} ` : ''}<span style={{ color:'#4F46E5' }}>{coin}</span>
+            </p>
           </div>
-        )
-      })}
+
+          <div>
+            <p style={{ fontSize:12, color:'#6B7280', marginBottom:8, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              {type === 'swap' ? 'ChangeNow deposit address' : 'Deposit address'}
+            </p>
+            <div style={{ display:'flex', alignItems:'center', gap:10, background:'#F9FAFB', border:'1.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px' }}>
+              <span style={{ fontFamily:'monospace', fontSize:13, color:'#111827', wordBreak:'break-all', flex:1 }}>{address}</span>
+              <CopyButton text={address} />
+            </div>
+          </div>
+
+          {timer > 0 && (
+            <div style={{ textAlign:'center', color:'#6B7280', fontSize:14 }}>
+              Expires in <span style={{ fontWeight:700, color: timer < 300 ? '#EF4444' : '#111827' }}>{formatTimer(timer)}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {(status === 'completed' || status === 'finished') && (
+        <div style={{ textAlign:'center', padding:'20px 0' }}>
+          <div style={{ width:60, height:60, borderRadius:'50%', background:'rgba(16,185,129,0.12)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3 style={{ fontFamily:'Bebas Neue', fontSize:28, color:'#10B981', letterSpacing:'0.03em' }}>
+            {type === 'swap' ? 'Swap Complete' : 'Naira Sent'}
+          </h3>
+          <p style={{ color:'#6B7280', marginTop:8, fontSize:14 }}>
+            {type === 'swap' ? 'Your crypto has been exchanged and sent.' : 'Check your bank account — the money is on its way.'}
+          </p>
+          <div style={{ marginTop:20, padding:'16px', background:'#F5F3FF', borderRadius:12 }}>
+            <p style={{ fontSize:13, color:'#4F46E5', fontWeight:600 }}>Want instant conversions + history?</p>
+            <p style={{ fontSize:13, color:'#6B7280', marginTop:4 }}>Download the CERA app for auto-processing and saved bank details.</p>
+          </div>
+          <button onClick={onDone} style={{ marginTop:16, background:'none', border:'none', color:'#4F46E5', fontWeight:600, cursor:'pointer', fontSize:14 }}>Convert again</button>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── OfframpWidget ───────────────────────────────────────────────────────────
+// ─── OfframpWidget ────────────────────────────────────────────────────────────
 
 function OfframpWidget() {
-  const [phase, setPhase] = useState('form') // 'form' | 'pending' | 'done'
-  const [amount, setAmount] = useState('')
-  const [coin, setCoin] = useState('USDT')
-  const [chain, setChain] = useState('TRON')
-  const [bank, setBank] = useState(BANKS[0].code)
-  const [accountNumber, setAccountNumber] = useState('')
-  const [accountName, setAccountName] = useState('')
-  const [nairaValue, setNairaValue] = useState(null)
-  const [rateLoading, setRateLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [txn, setTxn] = useState(null)
-  const [timer, setTimer] = useState(30 * 60)
-  const rateTimer = useRef(null)
+  const [coin, setCoin]         = useState('USDT')
+  const [chain, setChain]       = useState('ETH')
+  const [amount, setAmount]     = useState('')
+  const [bank, setBank]         = useState(BANKS[0].code)
+  const [accNum, setAccNum]     = useState('')
+  const [accName, setAccName]   = useState('')
+  const [rate, setRate]         = useState(null)
+  const [step, setStep]         = useState('form') // form | pending | done
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [guestId, setGuestId]   = useState(null)
+  const [deposit, setDeposit]   = useState(null)
+  const [status, setStatus]     = useState('waiting')
+  const [timer, setTimer]       = useState(1800)
+  const pollRef = useRef(null)
 
-  const isStable = coin === 'USDT' || coin === 'USDC'
-  const chains = STABLECOIN_CHAINS[coin] || []
-
-  // When coin changes, reset chain
+  // Fetch live rate
   useEffect(() => {
-    if (isStable) {
-      setChain(STABLECOIN_CHAINS[coin][0])
-    }
+    fetch('/api/rates').then(r => r.json()).then(data => {
+      const r = data[coin] || data[coin + 'usdt'] || null
+      setRate(r?.priceNGN || null)
+    }).catch(() => {})
   }, [coin])
 
-  // Fetch rate
-  const fetchRate = useCallback(async () => {
-    if (!amount || isNaN(amount) || Number(amount) <= 0) {
-      setNairaValue(null)
-      return
-    }
-    setRateLoading(true)
-    try {
-      const res = await fetch('/api/rates')
-      if (!res.ok) throw new Error('Rate fetch failed')
-      const data = await res.json()
-      const key = coin.toLowerCase()
-      const rate = data[key] || data[coin]
-      if (rate) {
-        setNairaValue(Number(amount) * Number(rate))
-      } else {
-        setNairaValue(null)
-      }
-    } catch {
-      setNairaValue(null)
-    } finally {
-      setRateLoading(false)
-    }
-  }, [amount, coin])
-
+  // Countdown timer
   useEffect(() => {
-    clearTimeout(rateTimer.current)
-    rateTimer.current = setTimeout(fetchRate, 600)
-    return () => clearTimeout(rateTimer.current)
-  }, [fetchRate])
+    if (step !== 'pending') return
+    const t = setInterval(() => setTimer(s => s > 0 ? s - 1 : 0), 1000)
+    return () => clearInterval(t)
+  }, [step])
 
-  // Poll txn status in pending phase
-  useEffect(() => {
-    if (phase !== 'pending' || !txn?._id) return
-    const interval = setInterval(async () => {
+  // Poll status
+  const startPoll = useCallback((id) => {
+    pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/guest/${txn._id}`)
-        if (!res.ok) return
-        const data = await res.json()
-        setTxn(prev => ({ ...prev, ...data }))
-        if (data.status === 'completed') {
-          setPhase('done')
-          clearInterval(interval)
+        const r = await fetch(`/api/guest/${id}`)
+        const d = await r.json()
+        setStatus(d.status)
+        if (d.status === 'completed' || d.status === 'failed' || d.status === 'expired') {
+          clearInterval(pollRef.current)
+          if (d.status === 'completed') setStep('done')
         }
       } catch {}
     }, 4000)
-    return () => clearInterval(interval)
-  }, [phase, txn?._id])
+  }, [])
 
-  // Timer countdown
-  useEffect(() => {
-    if (phase !== 'pending') return
-    const interval = setInterval(() => {
-      setTimer(t => {
-        if (t <= 1) { clearInterval(interval); return 0 }
-        return t - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [phase])
+  useEffect(() => () => clearInterval(pollRef.current), [])
 
-  const handleSubmit = async () => {
+  const onSubmit = async () => {
     setError('')
-    if (!amount || Number(amount) <= 0) return setError('Enter a valid amount')
-    if (!accountNumber || accountNumber.length < 10) return setError('Enter a valid 10-digit account number')
-    if (!accountName.trim()) return setError('Enter account name')
-    setSubmitting(true)
+    if (!amount || isNaN(amount) || Number(amount) <= 0) { setError('Enter a valid amount'); return }
+    if (!accNum || accNum.length < 10) { setError('Enter a valid 10-digit account number'); return }
+    if (!accName.trim()) { setError('Enter your account name'); return }
+    setLoading(true)
     try {
-      const selectedBank = BANKS.find(b => b.code === bank)
-      const body = {
-        coin,
-        chain: isStable ? chain : undefined,
-        amount: Number(amount),
-        bankCode: bank,
-        bankName: selectedBank?.name,
-        accountNumber,
-        accountName,
-      }
-      const res = await fetch('/api/guest/create', {
+      const bankObj = BANKS.find(b => b.code === bank)
+      const r = await fetch('/api/guest/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          coin, chain: (coin === 'USDT' || coin === 'USDC') ? chain : undefined,
+          amount: Number(amount),
+          bankCode: bank, bankName: bankObj?.name || bank,
+          accountNumber: accNum, accountName: accName,
+        }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Submission failed')
-      setTxn(data)
-      setTimer(30 * 60)
-      setPhase('pending')
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSubmitting(false)
-    }
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setGuestId(d.guestId)
+      setDeposit(d)
+      setStep('pending')
+      startPoll(d.guestId)
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
   }
 
-  if (phase === 'done') {
+  const isStable = coin === 'USDT' || coin === 'USDC'
+  const nairaVal = amount && rate ? Number(amount) * rate : null
+
+  if (step === 'pending' || step === 'done') {
     return (
-      <div style={{ padding: '32px 28px', textAlign: 'center' }}>
-        <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', border: '2px solid #10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#10B981' }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </div>
-        <h3 style={{ margin: '0 0 8px', fontSize: 22, fontFamily: 'Space Grotesk' }}>Naira Sent</h3>
-        <p style={{ color: '#6B7280', margin: '0 0 24px', fontSize: 15 }}>
-          {formatNaira(txn?.amountNGN)} has been sent to your bank account.
-        </p>
-        <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 24, textAlign: 'left' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>Bank</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{txn?.bankName}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>Account</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{txn?.accountNumber}</span>
-          </div>
-        </div>
-        <button className="btn-primary" onClick={() => { setPhase('form'); setTxn(null); setAmount(''); setNairaValue(null) }}>
-          New Conversion
-        </button>
-      </div>
-    )
-  }
-
-  if (phase === 'pending') {
-    const statusIdx = STATUS_ORDER.indexOf(txn?.status || 'waiting')
-    return (
-      <div style={{ padding: '28px 24px' }}>
-        <StepIndicator steps={STATUS_ORDER} current={txn?.status || 'waiting'} />
-
-        <div style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 14, padding: '20px', marginBottom: 20, textAlign: 'center' }}>
-          <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 1 }}>Send Exactly</p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <img src={COINS.find(c => c.symbol === coin)?.icon} alt="" style={{ width: 28, height: 28 }} />
-            <span style={{ fontSize: 32, fontWeight: 700, fontFamily: 'Space Grotesk' }}>
-              {txn?.expectedAmount || amount} <span style={{ color: '#7C3AED' }}>{coin}</span>
-            </span>
-          </div>
-          {isStable && (
-            <p style={{ color: '#6B7280', fontSize: 13, marginTop: 6 }}>on {txn?.chain || chain} network</p>
-          )}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 1 }}>Deposit Address</p>
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#F9FAFB', wordBreak: 'break-all', lineHeight: 1.5 }}>
-              {txn?.depositAddress || 'Loading address...'}
-            </span>
-            {txn?.depositAddress && <CopyButton text={txn.depositAddress} />}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div>
-            <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>Status</p>
-            <StatusBadge status={txn?.status || 'waiting'} />
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>Expires In</p>
-            <span style={{ fontFamily: 'Space Grotesk', fontSize: 20, fontWeight: 700, color: timer < 300 ? '#EF4444' : '#F9FAFB' }}>
-              {formatTimer(timer)}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>Receiving Bank</span>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>{txn?.bankName}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>Account Number</span>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>{txn?.accountNumber}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>Account Name</span>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>{txn?.accountName}</span>
-          </div>
-        </div>
-
-        <p style={{ color: '#4B5563', fontSize: 12, textAlign: 'center', margin: 0 }}>
-          Do not close this tab. Checking every 4 seconds for your transfer.
-        </p>
-      </div>
+      <DepositCard
+        address={deposit?.depositAddress}
+        coin={coin + (isStable ? ` (${chain})` : '')}
+        amount={deposit?.expectedAmount}
+        timer={timer}
+        status={status}
+        type="offramp"
+        onDone={() => { setStep('form'); setStatus('waiting'); setTimer(1800); setDeposit(null); setAmount(''); setGuestId(null) }}
+      />
     )
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>You Send</p>
-
-      <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-        <input
-          type="number"
-          className="input-field"
-          placeholder="0.00"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          style={{ flex: 1, fontSize: 20, fontWeight: 600 }}
-          min="0"
-        />
-        <CoinSelect value={coin} onChange={setCoin} coins={COINS} />
-      </div>
-
-      {isStable && (
-        <div style={{ marginBottom: 10 }}>
-          <select className="input-field" value={chain} onChange={e => setChain(e.target.value)}>
-            {chains.map(c => <option key={c} value={c}>{c} network</option>)}
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* Coin + amount */}
+      <div>
+        <label style={{ fontSize:12, color:'#6B7280', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:8 }}>You Send</label>
+        <div style={{ display:'flex', gap:10 }}>
+          <input className="input-field" type="number" placeholder="0.00" value={amount}
+            onChange={e => setAmount(e.target.value)}
+            style={{ flex:1, fontWeight:700, fontSize:18 }} />
+          <CoinSelect value={coin} onChange={v => { setCoin(v); if (STABLECOIN_CHAINS[v]) setChain(STABLECOIN_CHAINS[v][0]) }} coins={COINS} style={{ width:160 }} />
+        </div>
+        {isStable && (
+          <select className="input-field" value={chain} onChange={e => setChain(e.target.value)} style={{ marginTop:8, appearance:'none' }}>
+            {STABLECOIN_CHAINS[coin].map(c => <option key={c} value={c}>{coin} on {c}</option>)}
           </select>
-        </div>
-      )}
-
-      <div style={{ minHeight: 28, marginBottom: 16 }}>
-        {rateLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6B7280', fontSize: 14 }}>
-            <IconRefresh /> <span>Fetching rate...</span>
+        )}
+        {nairaVal && (
+          <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:'#10B981' }} />
+            <span style={{ fontSize:14, color:'#10B981', fontWeight:700 }}>≈ {formatNaira(nairaVal)}</span>
+            <span style={{ fontSize:12, color:'#9CA3AF' }}>· live rate {formatNaira(rate)}/{coin}</span>
           </div>
-        ) : nairaValue ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'Space Grotesk', color: '#F9FAFB' }}>
-              {formatNaira(nairaValue)}
-            </span>
-            <span style={{ color: '#6B7280', fontSize: 13 }}>estimated</span>
-          </div>
-        ) : amount ? (
-          <span style={{ color: '#4B5563', fontSize: 13 }}>Could not fetch rate</span>
-        ) : null}
+        )}
       </div>
 
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 0 20px' }} />
-
-      <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Your Bank</p>
-
-      <div style={{ marginBottom: 10 }}>
-        <select className="input-field" value={bank} onChange={e => setBank(e.target.value)}>
-          {BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
-        </select>
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <input
-          type="text"
-          className="input-field"
-          placeholder="Account Number (10 digits)"
-          value={accountNumber}
-          onChange={e => setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-          inputMode="numeric"
-        />
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <input
-          type="text"
-          className="input-field"
-          placeholder="Account Name"
-          value={accountName}
-          onChange={e => setAccountName(e.target.value)}
-        />
-      </div>
-
-      {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 14, color: '#EF4444', fontSize: 14 }}>
-          {error}
+      {/* Bank */}
+      <div style={{ borderTop:'1px solid #F3F4F6', paddingTop:16 }}>
+        <label style={{ fontSize:12, color:'#6B7280', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:8 }}>Your Bank</label>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <select className="input-field" value={bank} onChange={e => setBank(e.target.value)} style={{ appearance:'none' }}>
+            {BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+          </select>
+          <input className="input-field" placeholder="Account number (10 digits)" value={accNum}
+            onChange={e => setAccNum(e.target.value.replace(/\D/g,'').slice(0,10))} maxLength={10} />
+          <input className="input-field" placeholder="Account name" value={accName}
+            onChange={e => setAccName(e.target.value)} />
         </div>
-      )}
+      </div>
 
-      <button className="btn-primary" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Processing...' : 'Convert Now'}
+      {error && <p style={{ color:'#EF4444', fontSize:13, fontWeight:500 }}>{error}</p>}
+
+      <button className="btn-primary" onClick={onSubmit} disabled={loading}>
+        {loading ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}><IconSpinner /> Getting your address...</span> : 'Convert to Naira →'}
       </button>
 
-      <p style={{ textAlign: 'center', color: '#4B5563', fontSize: 12, marginTop: 12 }}>
-        Live rates · Powered by CoinGecko
+      <p style={{ fontSize:12, color:'#9CA3AF', textAlign:'center' }}>
+        Powered by live CoinGecko rates · No account needed
       </p>
     </div>
   )
 }
 
-// ─── SwapWidget ──────────────────────────────────────────────────────────────
+// ─── SwapWidget ───────────────────────────────────────────────────────────────
 
 function SwapWidget() {
-  const [fromCoin, setFromCoin] = useState('BTC')
-  const [toCoin, setToCoin] = useState('ETH')
-  const [fromAmount, setFromAmount] = useState('')
-  const [toAmount, setToAmount] = useState('')
-  const [destAddress, setDestAddress] = useState('')
+  const [fromCoin, setFromCoin]   = useState('BTC')
+  const [toCoin, setToCoin]       = useState('ETH')
+  const [amount, setAmount]       = useState('')
+  const [destAddr, setDestAddr]   = useState('')
+  const [estimate, setEstimate]   = useState(null)
+  const [minAmount, setMinAmount] = useState(null)
   const [estimating, setEstimating] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [swapTxn, setSwapTxn] = useState(null)
-  const [phase, setPhase] = useState('form') // 'form' | 'pending'
+  const [step, setStep]           = useState('form')
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [swapData, setSwapData]   = useState(null)
+  const [swapStatus, setSwapStatus] = useState('waiting_for_deposit')
   const debounceRef = useRef(null)
+  const pollRef = useRef(null)
 
-  const fetchEstimate = useCallback(async (val, from, to) => {
-    if (!val || isNaN(val) || Number(val) <= 0) { setToAmount(''); return }
-    setEstimating(true)
-    try {
-      const res = await fetch(`/api/changenow/estimate?from=${from}&to=${to}&amount=${val}`)
-      const data = await res.json()
-      if (res.ok) setToAmount(data.estimatedAmount || data.toAmount || '')
-      else setToAmount('')
-    } catch {
-      setToAmount('')
-    } finally {
-      setEstimating(false)
-    }
-  }, [])
+  // Fetch min amount
+  useEffect(() => {
+    if (!fromCoin || !toCoin) return
+    fetch(`/api/changenow/min?from=${fromCoin.toLowerCase()}&to=${toCoin.toLowerCase()}`)
+      .then(r => r.json()).then(d => setMinAmount(d.minAmount)).catch(() => {})
+  }, [fromCoin, toCoin])
 
+  // Debounced estimate
   useEffect(() => {
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchEstimate(fromAmount, fromCoin, toCoin), 500)
-    return () => clearTimeout(debounceRef.current)
-  }, [fromAmount, fromCoin, toCoin, fetchEstimate])
-
-  // Poll swap status
-  useEffect(() => {
-    if (phase !== 'pending' || !swapTxn?.id) return
-    const interval = setInterval(async () => {
+    if (!amount || isNaN(amount) || Number(amount) <= 0) { setEstimate(null); return }
+    setEstimating(true)
+    debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/changenow/status/${swapTxn.id}`)
-        if (!res.ok) return
-        const data = await res.json()
-        setSwapTxn(prev => ({ ...prev, ...data }))
-        if (data.status === 'finished' || data.status === 'failed') clearInterval(interval)
+        const r = await fetch(`/api/changenow/estimate?from=${fromCoin.toLowerCase()}&to=${toCoin.toLowerCase()}&amount=${amount}`)
+        const d = await r.json()
+        setEstimate(d.estimatedAmount || d.toAmount || null)
+      } catch {}
+      finally { setEstimating(false) }
+    }, 600)
+  }, [amount, fromCoin, toCoin])
+
+  const startPoll = useCallback((id) => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/changenow/status/${id}`)
+        const d = await r.json()
+        setSwapStatus(d.status)
+        if (d.status === 'finished' || d.status === 'failed' || d.status === 'refunded') {
+          clearInterval(pollRef.current)
+        }
       } catch {}
     }, 5000)
-    return () => clearInterval(interval)
-  }, [phase, swapTxn?.id])
+  }, [])
 
-  const handleSwap = async () => {
+  useEffect(() => () => clearInterval(pollRef.current), [])
+
+  const onSwap = async () => {
     setError('')
-    if (!fromAmount || Number(fromAmount) <= 0) return setError('Enter an amount')
-    if (!destAddress.trim()) return setError('Enter destination wallet address')
-    if (fromCoin === toCoin) return setError('Select different coins')
-    setSubmitting(true)
+    if (!amount || isNaN(amount) || Number(amount) <= 0) { setError('Enter an amount'); return }
+    if (!destAddr.trim()) { setError('Enter destination wallet address'); return }
+    if (minAmount && Number(amount) < minAmount) { setError(`Minimum is ${minAmount} ${fromCoin}`); return }
+    setLoading(true)
     try {
-      const res = await fetch('/api/changenow/create', {
+      const r = await fetch('/api/changenow/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: fromCoin, to: toCoin, amount: Number(fromAmount), address: destAddress }),
+        body: JSON.stringify({ from: fromCoin.toLowerCase(), to: toCoin.toLowerCase(), amount: Number(amount), address: destAddr }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Swap failed')
-      setSwapTxn(data)
-      setPhase('pending')
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setSubmitting(false)
-    }
+      const d = await r.json()
+      if (!r.ok || d.error) throw new Error(d.error || d.message || 'Failed to create swap')
+      setSwapData(d)
+      setStep('pending')
+      startPoll(d.id)
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
   }
 
-  if (phase === 'pending') {
+  const swap = () => {
+    const f = fromCoin; setFromCoin(toCoin); setToCoin(f); setEstimate(null); setAmount('')
+  }
+
+  if (step === 'pending') {
     return (
-      <div style={{ padding: '28px 24px' }}>
-        <StepIndicator steps={SWAP_STATUS_ORDER} current={swapTxn?.status || 'waiting_for_deposit'} />
-
-        <div style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 14, padding: '20px', marginBottom: 20, textAlign: 'center' }}>
-          <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 1 }}>Send Exactly</p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <img src={COINS.find(c => c.symbol === fromCoin)?.icon} alt="" style={{ width: 24, height: 24 }} />
-            <span style={{ fontSize: 28, fontWeight: 700, fontFamily: 'Space Grotesk' }}>
-              {swapTxn?.amountExpectedFrom || fromAmount} <span style={{ color: '#7C3AED' }}>{fromCoin}</span>
-            </span>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 1 }}>Deposit Address</p>
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all', lineHeight: 1.5 }}>
-              {swapTxn?.payinAddress || swapTxn?.depositAddress || 'Loading...'}
-            </span>
-            {(swapTxn?.payinAddress || swapTxn?.depositAddress) && (
-              <CopyButton text={swapTxn.payinAddress || swapTxn.depositAddress} />
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div>
-            <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>Status</p>
-            <StatusBadge status={swapTxn?.status || 'waiting_for_deposit'} />
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>You Receive</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <img src={COINS.find(c => c.symbol === toCoin)?.icon} alt="" style={{ width: 18, height: 18 }} />
-              <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Space Grotesk' }}>
-                {swapTxn?.amountExpectedTo || toAmount} {toCoin}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <button
-          className="btn-primary"
-          onClick={() => { setPhase('form'); setSwapTxn(null); setFromAmount(''); setToAmount('') }}
-          style={{ background: 'rgba(255,255,255,0.06)', marginTop: 4 }}
-        >
-          New Swap
-        </button>
-      </div>
+      <DepositCard
+        address={swapData?.payinAddress}
+        coin={fromCoin}
+        amount={swapData?.payinAmount || amount}
+        timer={0}
+        status={swapStatus}
+        type="swap"
+        onDone={() => { setStep('form'); setSwapStatus('waiting_for_deposit'); setSwapData(null); setAmount(''); setDestAddr('') }}
+      />
     )
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ marginBottom: 8 }}>
-        <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>From</p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input
-            type="number"
-            className="input-field"
-            placeholder="0.00"
-            value={fromAmount}
-            onChange={e => setFromAmount(e.target.value)}
-            style={{ flex: 1, fontSize: 20, fontWeight: 600 }}
-            min="0"
-          />
-          <CoinSelect value={fromCoin} onChange={setFromCoin} coins={COINS} />
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* From */}
+      <div>
+        <label style={{ fontSize:12, color:'#6B7280', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:8 }}>You Send</label>
+        <div style={{ display:'flex', gap:10 }}>
+          <input className="input-field" type="number" placeholder="0.00" value={amount}
+            onChange={e => setAmount(e.target.value)} style={{ flex:1, fontWeight:700, fontSize:18 }} />
+          <CoinSelect value={fromCoin} onChange={setFromCoin} coins={SWAP_COINS} style={{ width:160 }} />
         </div>
+        {minAmount && <p style={{ fontSize:12, color:'#9CA3AF', marginTop:4 }}>Min: {minAmount} {fromCoin}</p>}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '14px 0', color: '#6B7280' }}>
-        <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.06)' }} />
-        <div style={{ margin: '0 14px', background: 'rgba(255,255,255,0.06)', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <IconArrowDown />
-        </div>
-        <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.06)' }} />
+      {/* Swap arrow */}
+      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ flex:1, height:1, background:'#F3F4F6' }} />
+        <button onClick={swap} style={{ width:36, height:36, borderRadius:'50%', border:'1.5px solid #E5E7EB', background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#4F46E5', transition:'transform 0.3s' }}
+          onMouseEnter={e => e.target.style.transform='rotate(180deg)'} onMouseLeave={e => e.target.style.transform='rotate(0deg)'}>
+          <IconArrow />
+        </button>
+        <div style={{ flex:1, height:1, background:'#F3F4F6' }} />
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>To</p>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '0.75rem 1rem', display: 'flex', alignItems: 'center' }}>
-            {estimating ? (
-              <span style={{ color: '#4B5563', fontSize: 16 }}>Estimating...</span>
-            ) : (
-              <span style={{ fontSize: 20, fontWeight: 600, color: toAmount ? '#F9FAFB' : '#4B5563' }}>
-                {toAmount || '0.00'}
-              </span>
-            )}
+      {/* To */}
+      <div>
+        <label style={{ fontSize:12, color:'#6B7280', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:8 }}>You Receive</label>
+        <div style={{ display:'flex', gap:10 }}>
+          <div className="input-field" style={{ flex:1, display:'flex', alignItems:'center', background:'#F9FAFB', fontWeight:700, fontSize:18, color: estimate ? '#111827' : '#9CA3AF' }}>
+            {estimating ? <span style={{ fontSize:14, color:'#9CA3AF' }}>Calculating...</span> : (estimate ? `≈ ${estimate}` : '—')}
           </div>
-          <CoinSelect value={toCoin} onChange={setToCoin} coins={COINS} />
+          <CoinSelect value={toCoin} onChange={setToCoin} coins={SWAP_COINS.filter(c => c.symbol !== fromCoin)} style={{ width:160 }} />
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Destination Address</p>
-        <input
-          type="text"
-          className="input-field"
-          placeholder={`Your ${toCoin} wallet address`}
-          value={destAddress}
-          onChange={e => setDestAddress(e.target.value)}
-        />
+      {/* Destination */}
+      <div>
+        <label style={{ fontSize:12, color:'#6B7280', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', display:'block', marginBottom:8 }}>Your {toCoin} Wallet Address</label>
+        <input className="input-field" placeholder={`Enter your ${toCoin} address`} value={destAddr}
+          onChange={e => setDestAddr(e.target.value)} style={{ fontFamily:'monospace', fontSize:13 }} />
       </div>
 
-      {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 14, color: '#EF4444', fontSize: 14 }}>
-          {error}
-        </div>
-      )}
+      {error && <p style={{ color:'#EF4444', fontSize:13, fontWeight:500 }}>{error}</p>}
 
-      <button className="btn-primary" onClick={handleSwap} disabled={submitting}>
-        {submitting ? 'Processing...' : 'Swap Now'}
+      <button className="btn-primary" onClick={onSwap} disabled={loading}>
+        {loading ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}><IconSpinner /> Creating swap...</span> : `Swap ${fromCoin} → ${toCoin}`}
       </button>
+
+      <p style={{ fontSize:12, color:'#9CA3AF', textAlign:'center' }}>
+        Powered by ChangeNow · Best rate guaranteed
+      </p>
     </div>
   )
 }
 
-// ─── ConversionWidget (tabs) ─────────────────────────────────────────────────
+// ─── ConversionWidget ─────────────────────────────────────────────────────────
 
 function ConversionWidget() {
   const [tab, setTab] = useState('offramp')
-
   return (
-    <div className="card" style={{ maxWidth: 480, width: '100%', margin: '0 auto' }}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '0 24px' }}>
-        {[
-          { key: 'offramp', label: 'Offramp to Naira' },
-          { key: 'swap',    label: 'Crypto Swap' },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              padding: '16px 0',
-              marginRight: 24,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              fontFamily: 'Inter',
-              color: tab === t.key ? '#F9FAFB' : '#6B7280',
-              borderBottom: tab === t.key ? '2px solid #7C3AED' : '2px solid transparent',
-              transition: 'all 0.2s',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div className="widget-card" style={{ padding:28 }}>
+      <div className="tab-bar" style={{ marginBottom:24 }}>
+        <button className={`tab-btn ${tab === 'offramp' ? 'active' : ''}`} onClick={() => setTab('offramp')}>
+          Offramp → Naira
+        </button>
+        <button className={`tab-btn ${tab === 'swap' ? 'active' : ''}`} onClick={() => setTab('swap')}>
+          Crypto Swap
+        </button>
       </div>
-
       {tab === 'offramp' ? <OfframpWidget /> : <SwapWidget />}
     </div>
   )
 }
 
-// ─── Navbar ──────────────────────────────────────────────────────────────────
+// ─── Navbar ───────────────────────────────────────────────────────────────────
 
 function Navbar() {
   const [scrolled, setScrolled] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
+    const fn = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', fn)
+    return () => window.removeEventListener('scroll', fn)
   }, [])
-
   return (
     <nav style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-      padding: '0 5%',
-      height: 64,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      backdropFilter: scrolled ? 'blur(20px)' : 'none',
-      background: scrolled ? 'rgba(9,9,15,0.85)' : 'transparent',
-      borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
-      transition: 'all 0.3s',
+      position:'fixed', top:0, left:0, right:0, zIndex:100,
+      background: scrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(16px)' : 'none',
+      borderBottom: scrolled ? '1px solid #F3F4F6' : 'none',
+      transition:'all 0.3s',
     }}>
-      <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 22 }} className="gradient-text">
-        CERA
-      </span>
-      <button style={{
-        background: 'none',
-        border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 10,
-        padding: '8px 20px',
-        color: '#F9FAFB',
-        fontWeight: 600,
-        fontSize: 14,
-        cursor: 'pointer',
-        fontFamily: 'Inter',
-        transition: 'all 0.2s',
-      }}
-        onMouseEnter={e => { e.target.style.borderColor = 'rgba(124,58,237,0.6)'; e.target.style.color = '#A78BFA' }}
-        onMouseLeave={e => { e.target.style.borderColor = 'rgba(255,255,255,0.15)'; e.target.style.color = '#F9FAFB' }}
-      >
-        Download App
-      </button>
+      <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 24px', height:68, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span style={{ fontFamily:'Bebas Neue', fontSize:28, letterSpacing:'0.08em', background:'linear-gradient(135deg,#4F46E5,#7C3AED)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>CERA</span>
+        <div style={{ display:'flex', alignItems:'center', gap:32 }} className="hidden-mobile">
+          {['Features','How It Works','Download'].map(l => (
+            <a key={l} href={`#${l.toLowerCase().replace(/\s/g,'-')}`} style={{ textDecoration:'none', color:'#374151', fontWeight:500, fontSize:15, transition:'color 0.2s' }}
+              onMouseEnter={e=>e.target.style.color='#4F46E5'} onMouseLeave={e=>e.target.style.color='#374151'}>{l}</a>
+          ))}
+        </div>
+        <a href="#download" style={{ textDecoration:'none' }}>
+          <button className="btn-outline" style={{ padding:'9px 20px' }}>Get the App</button>
+        </a>
+      </div>
     </nav>
   )
 }
 
-// ─── HowItWorks ──────────────────────────────────────────────────────────────
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
-function HowItWorks() {
-  const steps = [
-    { n: '01', title: 'Enter Amount & Bank', desc: 'Select your coin and enter your Nigerian bank details. No account or signup required.' },
-    { n: '02', title: 'Send Crypto',          desc: 'Send exactly the amount shown to the deposit address. We detect it within seconds.' },
-    { n: '03', title: 'Receive Naira',         desc: 'Naira lands in your bank account within seconds of confirmation.' },
-  ]
+function Hero() {
   return (
-    <section style={{ padding: '100px 5%', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 60 }}>
-        <p style={{ color: '#7C3AED', fontSize: 13, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Simple Process</p>
-        <h2 style={{ fontSize: 38, margin: 0, fontFamily: 'Space Grotesk' }}>How it works</h2>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24 }}>
-        {steps.map(s => (
-          <div key={s.n} className="card" style={{ padding: '32px 28px' }}>
-            <div style={{
-              fontSize: 48, fontFamily: 'Space Grotesk', fontWeight: 700,
-              background: 'linear-gradient(135deg, #7C3AED, #3B82F6)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              marginBottom: 16, lineHeight: 1,
-            }}>
-              {s.n}
-            </div>
-            <h3 style={{ margin: '0 0 10px', fontSize: 18, fontFamily: 'Space Grotesk' }}>{s.title}</h3>
-            <p style={{ color: '#6B7280', margin: 0, fontSize: 15, lineHeight: 1.6 }}>{s.desc}</p>
+    <section id="hero" style={{
+      minHeight:'100vh', paddingTop:88,
+      background:'radial-gradient(ellipse 65% 55% at 75% 15%, rgba(79,70,229,0.10) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 5% 85%, rgba(249,115,22,0.08) 0%, transparent 55%), #fff',
+      display:'flex', alignItems:'center',
+    }}>
+      <div style={{ maxWidth:1200, margin:'0 auto', padding:'60px 24px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:60, alignItems:'center' }} className="hero-grid">
+        {/* Left */}
+        <div style={{ animation:'fadeInLeft 0.7s ease forwards' }}>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(79,70,229,0.08)', border:'1px solid rgba(79,70,229,0.18)', borderRadius:999, padding:'6px 14px', marginBottom:24 }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:'#10B981' }} className="animate-pulse-dot" />
+            <span style={{ fontSize:13, fontWeight:600, color:'#4F46E5' }}>Live rates · Instant detection · No signup</span>
           </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// ─── SupportedCoins ──────────────────────────────────────────────────────────
-
-function SupportedCoins() {
-  return (
-    <section style={{ padding: '60px 5% 100px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <p style={{ color: '#7C3AED', fontSize: 13, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Multi-Chain</p>
-        <h2 style={{ fontSize: 38, margin: '0 0 12px', fontFamily: 'Space Grotesk' }}>Supported Assets</h2>
-        <p style={{ color: '#6B7280', fontSize: 15, margin: 0 }}>USDT accepted on 5 chains: Ethereum, BNB, Polygon, TRON, Solana</p>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
-        {COINS.map(c => (
-          <div key={c.symbol} className="card" style={{ padding: '20px 28px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 140 }}>
-            <img src={c.icon} alt={c.name} style={{ width: 36, height: 36 }} />
-            <div>
-              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 16 }}>{c.symbol}</div>
-              <div style={{ color: '#6B7280', fontSize: 13 }}>{c.name}</div>
-            </div>
+          <h1 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(52px,7vw,88px)', lineHeight:1.0, color:'#111827', letterSpacing:'0.02em', marginBottom:20 }}>
+            CONVERT CRYPTO<br/>
+            TO NAIRA<br/>
+            <span className="gradient-text">INSTANTLY.</span>
+          </h1>
+          <p style={{ fontSize:'clamp(16px,2vw,19px)', color:'#6B7280', lineHeight:1.7, marginBottom:32, maxWidth:480 }}>
+            Send any crypto, receive Naira in your Nigerian bank account within seconds. No account needed, no forms, no waiting.
+          </p>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:40 }}>
+            <a href="#widget">
+              <button style={{ background:'linear-gradient(135deg,#4F46E5,#7C3AED)', color:'#fff', fontFamily:'DM Sans', fontWeight:700, fontSize:'1rem', padding:'14px 28px', borderRadius:14, border:'none', cursor:'pointer', boxShadow:'0 4px 20px rgba(79,70,229,0.35)', transition:'transform 0.2s,box-shadow 0.2s', whiteSpace:'nowrap' }}
+                onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 28px rgba(79,70,229,0.45)'}}
+                onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='0 4px 20px rgba(79,70,229,0.35)'}}>
+                Convert Now →
+              </button>
+            </a>
+            <a href="#download">
+              <button className="btn-outline">Download App</button>
+            </a>
           </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// ─── WhyCera ─────────────────────────────────────────────────────────────────
-
-function WhyCera() {
-  const features = [
-    {
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
-      ),
-      title: 'Detection in Seconds',
-      desc: 'Our system monitors the blockchain in real-time and detects your deposit within seconds of broadcast.',
-    },
-    {
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-      ),
-      title: 'Live CoinGecko Rates',
-      desc: 'We pull live market rates every minute from CoinGecko to ensure you always get a fair price.',
-    },
-    {
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
-        </svg>
-      ),
-      title: 'No Signup Required',
-      desc: 'Convert crypto to Naira with just your bank details. No email, no KYC, no waiting for approval.',
-    },
-    {
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-          <line x1="12" y1="18" x2="12.01" y2="18"/>
-        </svg>
-      ),
-      title: 'Mobile App for Power Users',
-      desc: 'Download the CERA app for transaction history, auto-processing, higher limits, and portfolio tracking.',
-    },
-  ]
-  return (
-    <section style={{ padding: '60px 5% 100px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 60 }}>
-        <p style={{ color: '#7C3AED', fontSize: 13, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Why CERA</p>
-        <h2 style={{ fontSize: 38, margin: 0, fontFamily: 'Space Grotesk' }}>Built different</h2>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
-        {features.map(f => (
-          <div key={f.title} className="card" style={{ padding: '28px' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, color: '#A78BFA' }}>
-              {f.icon}
-            </div>
-            <h3 style={{ margin: '0 0 10px', fontSize: 17, fontFamily: 'Space Grotesk' }}>{f.title}</h3>
-            <p style={{ color: '#6B7280', margin: 0, fontSize: 14, lineHeight: 1.7 }}>{f.desc}</p>
+          <div style={{ display:'flex', gap:24, flexWrap:'wrap' }}>
+            {[['15k+','Users'],['₦2.8B+','Converted'],['< 3s','Detection'],['8','Coins']].map(([v,l]) => (
+              <div key={l}>
+                <div style={{ fontFamily:'Bebas Neue', fontSize:28, color:'#4F46E5', letterSpacing:'0.04em' }}>{v}</div>
+                <div style={{ fontSize:13, color:'#6B7280', fontWeight:500 }}>{l}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// ─── DownloadSection ─────────────────────────────────────────────────────────
-
-function DownloadSection() {
-  return (
-    <section style={{ padding: '0 5% 100px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid transparent',
-        borderRadius: 24,
-        padding: '60px 48px',
-        textAlign: 'center',
-        backgroundImage: 'linear-gradient(rgba(9,9,15,1), rgba(9,9,15,1)), linear-gradient(135deg, #7C3AED, #3B82F6)',
-        backgroundOrigin: 'border-box',
-        backgroundClip: 'padding-box, border-box',
-      }}>
-        <p style={{ color: '#7C3AED', fontSize: 13, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>Mobile App</p>
-        <h2 style={{ fontSize: 38, margin: '0 0 16px', fontFamily: 'Space Grotesk' }}>Download CERA App</h2>
-        <p style={{ color: '#6B7280', fontSize: 16, maxWidth: 480, margin: '0 auto 36px', lineHeight: 1.7 }}>
-          Want auto-processing, transaction history, and higher limits? Get the full CERA experience on mobile.
-        </p>
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 12,
-            padding: '12px 28px',
-            color: '#F9FAFB',
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: 'pointer',
-            fontFamily: 'Inter',
-            display: 'flex', alignItems: 'center', gap: 10,
-            transition: 'all 0.2s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-            </svg>
-            App Store
-          </button>
-          <button style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 12,
-            padding: '12px 28px',
-            color: '#F9FAFB',
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: 'pointer',
-            fontFamily: 'Inter',
-            display: 'flex', alignItems: 'center', gap: 10,
-            transition: 'all 0.2s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 20.5v-17c0-.83.94-1.3 1.6-.8l14.15 8.5c.6.36.6 1.24 0 1.6L4.6 21.3c-.66.5-1.6.03-1.6-.8z"/>
-            </svg>
-            Google Play
-          </button>
+        </div>
+        {/* Right — phone mockup */}
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', animation:'fadeInRight 0.7s ease 0.2s both' }}>
+          <div style={{ position:'relative' }}>
+            <div style={{ position:'absolute', inset:'-20px', background:'radial-gradient(circle, rgba(79,70,229,0.15) 0%, transparent 70%)', borderRadius:'50%', zIndex:0 }} />
+            <img
+              src="/phone.jpg"
+              alt="CERA App"
+              className="animate-float"
+              style={{ width:'100%', maxWidth:320, borderRadius:32, boxShadow:'0 32px 80px rgba(79,70,229,0.25)', position:'relative', zIndex:1 }}
+            />
+          </div>
         </div>
       </div>
     </section>
   )
 }
 
-// ─── Footer ──────────────────────────────────────────────────────────────────
+// ─── Widget Section ───────────────────────────────────────────────────────────
+
+function WidgetSection() {
+  return (
+    <section id="widget" style={{ background:'#F5F3FF', padding:'80px 24px' }}>
+      <div style={{ maxWidth:540, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:36 }} className="reveal">
+          <p className="section-label" style={{ marginBottom:12 }}>Quick Convert</p>
+          <h2 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(36px,5vw,56px)', color:'#111827', letterSpacing:'0.03em' }}>TRY IT NOW — NO SIGNUP</h2>
+          <p style={{ color:'#6B7280', marginTop:10, fontSize:16 }}>Offramp crypto to Naira or swap any crypto for another.</p>
+        </div>
+        <div className="reveal delay-1">
+          <ConversionWidget />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── How It Works ─────────────────────────────────────────────────────────────
+
+function HowItWorks() {
+  const steps = [
+    { n:'01', title:'ENTER AMOUNT', desc:'Select your coin, enter the amount, and provide your Nigerian bank details. Supports all major banks and mobile wallets.' },
+    { n:'02', title:'SEND CRYPTO',  desc:'Send the exact amount to the deposit address shown. Works with BTC, ETH, SOL, USDT, USDC, BNB, TRX and more.' },
+    { n:'03', title:'NAIRA LANDS',  desc:'Our system detects your payment in seconds and sends Naira directly to your bank account. No delays.' },
+  ]
+  return (
+    <section id="how-it-works" style={{ padding:'100px 24px', background:'#fff' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:64 }} className="reveal">
+          <p className="section-label" style={{ marginBottom:12 }}>How It Works</p>
+          <h2 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(36px,5vw,60px)', color:'#111827' }}>THREE STEPS TO NAIRA</h2>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:28 }}>
+          {steps.map((s, i) => (
+            <div key={s.n} className={`card reveal delay-${i+1}`} style={{ padding:36, position:'relative', overflow:'hidden', transition:'transform 0.3s,box-shadow 0.3s' }}
+              onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-6px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(79,70,229,0.12)'}}
+              onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow=''}}>
+              <div style={{ fontFamily:'Bebas Neue', fontSize:72, color:'rgba(79,70,229,0.08)', position:'absolute', top:-8, right:16, lineHeight:1 }}>{s.n}</div>
+              <div style={{ width:48, height:48, borderRadius:12, background:'linear-gradient(135deg,#4F46E5,#7C3AED)', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:20 }}>
+                <span style={{ fontFamily:'Bebas Neue', fontSize:20, color:'#fff' }}>{s.n}</span>
+              </div>
+              <h3 style={{ fontFamily:'Bebas Neue', fontSize:24, color:'#111827', marginBottom:12, letterSpacing:'0.04em' }}>{s.title}</h3>
+              <p style={{ color:'#6B7280', lineHeight:1.7, fontSize:15 }}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Supported Coins ──────────────────────────────────────────────────────────
+
+function SupportedCoins() {
+  const all = [
+    ...COINS,
+    { symbol:'MATIC', name:'Polygon', icon:'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/matic.svg' },
+  ]
+  const tickerCoins = [...all, ...all]
+  return (
+    <section style={{ padding:'80px 0', background:'#F5F3FF', overflow:'hidden' }}>
+      <div style={{ textAlign:'center', marginBottom:48, padding:'0 24px' }} className="reveal">
+        <p className="section-label" style={{ marginBottom:12 }}>Supported Coins</p>
+        <h2 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(32px,4vw,52px)', color:'#111827' }}>8 COINS. 12+ CHAINS.</h2>
+        <p style={{ color:'#6B7280', marginTop:10, fontSize:15 }}>USDT accepted on 5 chains: Ethereum, BNB, Polygon, TRON, Solana</p>
+      </div>
+      {/* Ticker */}
+      <div className="ticker-wrap">
+        <div className="ticker-inner animate-marquee">
+          {tickerCoins.map((c, i) => (
+            <div key={i} style={{ display:'inline-flex', alignItems:'center', gap:10, margin:'0 20px', background:'#fff', border:'1px solid #E5E7EB', borderRadius:50, padding:'10px 20px', boxShadow:'0 2px 8px rgba(0,0,0,0.04)' }}>
+              <img src={c.icon} alt={c.symbol} style={{ width:28, height:28 }} />
+              <span style={{ fontWeight:700, color:'#111827', fontSize:15 }}>{c.symbol}</span>
+              <span style={{ color:'#9CA3AF', fontSize:13 }}>{c.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Features ─────────────────────────────────────────────────────────────────
+
+function Features() {
+  const feats = [
+    { icon:'⚡', title:'DETECTED IN SECONDS', desc:'Our real-time WebSocket watchers detect incoming payments the moment they hit the blockchain — no 5-minute waits.' },
+    { icon:'📈', title:'BEST LIVE RATES', desc:'Rates pulled from CoinGecko every 2 minutes. You always get the current market rate, not a stale one.' },
+    { icon:'🔐', title:'ZERO SIGNUP FOR QUICK CONVERT', desc:'Use the web converter with just your bank details. No account, no password, no hassle.' },
+    { icon:'📱', title:'MOBILE APP FOR POWER USERS', desc:'Download the CERA app for transaction history, auto-processing, higher limits, and instant conversions on-the-go.' },
+  ]
+  return (
+    <section id="features" style={{ padding:'100px 24px', background:'#0B0520' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:64 }} className="reveal">
+          <p style={{ fontSize:'0.8rem', fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'#7C3AED', marginBottom:12 }}>Why CERA</p>
+          <h2 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(36px,5vw,60px)', color:'#fff' }}>BUILT DIFFERENT.</h2>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:24 }}>
+          {feats.map((f, i) => (
+            <div key={f.title} className={`reveal delay-${i+1}`} style={{
+              background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)',
+              borderRadius:20, padding:32, transition:'background 0.3s,transform 0.3s'
+            }} onMouseEnter={e=>{e.currentTarget.style.background='rgba(79,70,229,0.15)';e.currentTarget.style.transform='translateY(-4px)'}}
+               onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,0.05)';e.currentTarget.style.transform='translateY(0)'}}>
+              <div style={{ fontSize:36, marginBottom:16 }}>{f.icon}</div>
+              <h3 style={{ fontFamily:'Bebas Neue', fontSize:22, color:'#fff', marginBottom:12, letterSpacing:'0.04em' }}>{f.title}</h3>
+              <p style={{ color:'rgba(255,255,255,0.6)', lineHeight:1.7, fontSize:15 }}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+
+function Download() {
+  return (
+    <section id="download" style={{ padding:'100px 24px', background:'#fff' }}>
+      <div style={{ maxWidth:1000, margin:'0 auto' }}>
+        <div style={{ background:'linear-gradient(135deg,#4F46E5 0%,#7C3AED 50%,#3730A3 100%)', borderRadius:32, padding:'60px 48px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'center' }} className="reveal download-grid">
+          {/* Left */}
+          <div>
+            <p style={{ fontSize:'0.8rem', fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.6)', marginBottom:16 }}>Mobile App</p>
+            <h2 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(36px,4vw,58px)', color:'#fff', lineHeight:1.05, marginBottom:20 }}>
+              THE FULL<br/>CERA EXPERIENCE
+            </h2>
+            <p style={{ color:'rgba(255,255,255,0.75)', lineHeight:1.7, marginBottom:32, fontSize:16 }}>
+              Saved bank details, transaction history, auto-processing, higher limits. Convert crypto to Naira on autopilot.
+            </p>
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+              {/* Apple Store */}
+              <a href="#" className="store-badge" style={{ textDecoration:'none' }}>
+                <svg width="24" height="24" viewBox="0 0 814 1000" fill="white">
+                  <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-43.4-150.3-112.7C172.5 672.4 124.5 548.1 124.5 430c0-194.3 125.4-297.5 248.1-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99zM554.1 158.6c27.6-34.4 47.7-82.4 47.7-130.4 0-6.5-.6-13-1.9-18.2-45.1 1.9-98.3 30.3-131 68.7-27.7 33.1-50.8 81.1-50.8 130.4 0 7.1 1.3 14.3 1.9 16.5 2.6.4 6.5.6 10.4.6 40.8 0 91.6-27.1 123.7-67.6z"/>
+                </svg>
+                <div>
+                  <div style={{ fontSize:'0.65rem', opacity:0.7, fontFamily:'DM Sans', lineHeight:1 }}>Download on the</div>
+                  <div style={{ fontSize:'1.1rem', fontFamily:'DM Sans', fontWeight:700, lineHeight:1.2 }}>App Store</div>
+                </div>
+              </a>
+              {/* Google Play */}
+              <a href="#" className="store-badge" style={{ textDecoration:'none' }}>
+                <svg width="24" height="24" viewBox="0 0 512 512" fill="none">
+                  <path d="M48 28l228 228L48 484c-16-12-16-32-16-228S32 40 48 28z" fill="#EA4335"/>
+                  <path d="M364 204l64 36-80 48-96-96z" fill="#FBBC04"/>
+                  <path d="M48 28c8-6 20-8 32-2l232 134-80 80z" fill="#4285F4"/>
+                  <path d="M48 484c8 6 20 8 32 2l232-134-80-80z" fill="#34A853"/>
+                </svg>
+                <div>
+                  <div style={{ fontSize:'0.65rem', opacity:0.7, fontFamily:'DM Sans', lineHeight:1 }}>Get it on</div>
+                  <div style={{ fontSize:'1.1rem', fontFamily:'DM Sans', fontWeight:700, lineHeight:1.2 }}>Google Play</div>
+                </div>
+              </a>
+            </div>
+          </div>
+          {/* Right — phone */}
+          <div style={{ display:'flex', justifyContent:'center' }}>
+            <img src="/phone.jpg" alt="CERA App" style={{ width:'100%', maxWidth:260, borderRadius:28, boxShadow:'0 24px 64px rgba(0,0,0,0.35)', transform:'rotate(2deg)' }} />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
   return (
-    <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 5%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-      <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18 }} className="gradient-text">CERA</span>
-      <div style={{ color: '#4B5563', fontSize: 14, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span>CERA &copy; 2025</span>
-        <a href="mailto:support@ceraapp.co" style={{ color: '#6B7280', textDecoration: 'none' }}>support@ceraapp.co</a>
-        <a href="#" style={{ color: '#6B7280', textDecoration: 'none' }}>Privacy</a>
-        <a href="#" style={{ color: '#6B7280', textDecoration: 'none' }}>Terms</a>
+    <footer style={{ background:'#0B0520', borderTop:'1px solid rgba(255,255,255,0.06)', padding:'48px 24px' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:20 }}>
+        <span style={{ fontFamily:'Bebas Neue', fontSize:24, letterSpacing:'0.08em', background:'linear-gradient(135deg,#4F46E5,#7C3AED)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>CERA</span>
+        <p style={{ color:'rgba(255,255,255,0.35)', fontSize:14, fontFamily:'DM Sans' }}>
+          © 2025 CERA · support@ceraapp.co · All rights reserved
+        </p>
+        <div style={{ display:'flex', gap:24 }}>
+          {['Privacy','Terms','Support'].map(l => (
+            <a key={l} href="#" style={{ color:'rgba(255,255,255,0.4)', fontSize:14, textDecoration:'none', fontFamily:'DM Sans', transition:'color 0.2s' }}
+              onMouseEnter={e=>e.target.style.color='#fff'} onMouseLeave={e=>e.target.style.color='rgba(255,255,255,0.4)'}>{l}</a>
+          ))}
+        </div>
       </div>
     </footer>
   )
 }
 
-// ─── Hero ────────────────────────────────────────────────────────────────────
-
-function Hero() {
-  return (
-    <section style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '120px 5% 80px',
-      position: 'relative',
-      overflow: 'hidden',
-      textAlign: 'center',
-    }}>
-      {/* Glow */}
-      <div style={{
-        position: 'absolute',
-        top: '30%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 700,
-        height: 700,
-        background: 'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, transparent 70%)',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
-
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 720, width: '100%' }}>
-        {/* Badge */}
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          background: 'rgba(124,58,237,0.1)',
-          border: '1px solid rgba(124,58,237,0.25)',
-          borderRadius: 999,
-          padding: '6px 18px',
-          marginBottom: 32,
-          fontSize: 13,
-          color: '#A78BFA',
-          fontWeight: 500,
-          letterSpacing: 0.3,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-          Instant &middot; Secure &middot; No Signup
-        </div>
-
-        <h1 style={{
-          fontSize: 'clamp(42px, 7vw, 80px)',
-          lineHeight: 1.08,
-          margin: '0 0 20px',
-          fontFamily: 'Space Grotesk',
-          fontWeight: 700,
-          letterSpacing: -2,
-        }}>
-          Convert Crypto<br />to Naira.{' '}
-          <span className="gradient-text">Instantly.</span>
-        </h1>
-
-        <p style={{
-          color: '#6B7280',
-          fontSize: 'clamp(16px, 2vw, 20px)',
-          lineHeight: 1.7,
-          maxWidth: 520,
-          margin: '0 auto 48px',
-        }}>
-          No account needed. Send crypto, receive Naira in your bank account within seconds.
-        </p>
-
-        <ConversionWidget />
-
-        <p style={{ color: '#4B5563', fontSize: 13, marginTop: 20 }}>
-          Live rates · Powered by CoinGecko
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// ─── Home Page ───────────────────────────────────────────────────────────────
+// ─── Home ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  useReveal()
   return (
-    <div style={{ minHeight: '100vh', background: '#09090F' }}>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .hero-grid { grid-template-columns: 1fr !important; }
+          .hero-grid > div:last-child { display: none !important; }
+          .download-grid { grid-template-columns: 1fr !important; }
+          .download-grid > div:last-child { display: none !important; }
+        }
+      `}</style>
       <Navbar />
       <Hero />
+      <WidgetSection />
       <HowItWorks />
       <SupportedCoins />
-      <WhyCera />
-      <DownloadSection />
+      <Features />
+      <Download />
       <Footer />
-    </div>
+    </>
   )
 }
