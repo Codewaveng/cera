@@ -50,10 +50,12 @@ router.post('/create', async (req, res) => {
     if (!from || !to || !amount || !address) {
       return res.status(400).json({ error: 'from, to, amount, address required' });
     }
+    const payload = { from, to, amount, address };
+    if (refundAddress) payload.refundAddress = refundAddress;
     const data = await cn(`/transactions/${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, amount, address, refundAddress: refundAddress || address }),
+      body: JSON.stringify(payload),
     });
     res.json(data);
   } catch (e) {
