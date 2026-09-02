@@ -132,26 +132,76 @@ function StatusDot({ status }) {
 
 // ─── DepositCard ──────────────────────────────────────────────────────────────
 
-function DepositCard({ address, coin, amount, timer, status, onDone, type }) {
+function QRCode({ value, size = 160 }) {
+  if (!value) return null
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=10&color=0F172A&bgcolor=ffffff`
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+      <div style={{ background:'#fff', border:'1.5px solid #E2E8F0', borderRadius:12, padding:10, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+        <img src={url} alt="QR Code" width={size} height={size} style={{ display:'block', borderRadius:4 }} />
+      </div>
+      <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600 }}>Scan to get address</p>
+    </div>
+  )
+}
+
+function DepositCard({ address, coin, amount, timer, status, onDone, type, swapId, estimate, toCoin }) {
   const done = status === 'completed' || status === 'finished'
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <StatusDot status={status} />
+
       {!done && (
         <>
-          <div style={{ background:'#F8FAFC', border:'1.5px solid #E2E8F0', borderRadius:12, padding:'16px 20px' }}>
-            <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Send exactly</p>
-            <p style={{ fontSize:24, fontWeight:800, color:'#0F172A' }}>{amount ? `${amount} ` : ''}<span style={{ color:'#4F46E5' }}>{coin}</span></p>
+          {/* Amount pill */}
+          <div style={{ background:'linear-gradient(135deg,#EEF2FF,#F5F3FF)', border:'1.5px solid #C7D2FE', borderRadius:12, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:3 }}>Send exactly</p>
+              <p style={{ fontSize:22, fontWeight:800, color:'#0F172A', lineHeight:1 }}>
+                {amount ? `${amount} ` : ''}<span style={{ color:'#4F46E5' }}>{coin}</span>
+              </p>
+            </div>
+            {estimate && toCoin && (
+              <div style={{ textAlign:'right' }}>
+                <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:3 }}>You receive</p>
+                <p style={{ fontSize:18, fontWeight:800, color:'#10B981' }}>≈ {estimate} {toCoin}</p>
+              </div>
+            )}
           </div>
-          <div>
-            <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
-              {type === 'swap' ? 'ChangeNow deposit address' : 'Your deposit address'}
-            </p>
-            <div style={{ display:'flex', alignItems:'center', gap:8, background:'#F8FAFC', border:'1.5px solid #E2E8F0', borderRadius:10, padding:'10px 14px' }}>
-              <span style={{ fontFamily:'monospace', fontSize:12, color:'#475569', wordBreak:'break-all', flex:1, lineHeight:1.5 }}>{address}</span>
+
+          {/* QR + address row */}
+          <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
+            <QRCode value={address} size={130} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
+                {type === 'swap' ? 'ChangeNow deposit address' : 'Your deposit address'}
+              </p>
+              <div style={{ background:'#F8FAFC', border:'1.5px solid #E2E8F0', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+                <span style={{ fontFamily:'monospace', fontSize:11, color:'#475569', wordBreak:'break-all', lineHeight:1.6, display:'block' }}>{address}</span>
+              </div>
               <CopyButton text={address} />
+
+              {swapId && (
+                <div style={{ marginTop:10 }}>
+                  <p style={{ fontSize:11, color:'#94A3B8', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Swap ID</p>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontFamily:'monospace', fontSize:11, color:'#64748B' }}>{swapId}</span>
+                    <CopyButton text={swapId} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Warning */}
+          <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:10, padding:'10px 14px', display:'flex', gap:8, alignItems:'flex-start' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, marginTop:1 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <p style={{ fontSize:12, color:'#92400E', lineHeight:1.5 }}>
+              Send <strong>only {coin}</strong> to this address. Sending the wrong coin will result in permanent loss.
+            </p>
+          </div>
+
+          {/* Timer */}
           {timer > 0 && (
             <div style={{ textAlign:'center', background: timer < 300 ? '#FEF2F2' : '#F8FAFC', borderRadius:10, padding:'10px 0', border:`1px solid ${timer < 300 ? '#FECACA' : '#E2E8F0'}` }}>
               <span style={{ fontSize:13, color:'#64748B' }}>Expires in </span>
@@ -160,6 +210,7 @@ function DepositCard({ address, coin, amount, timer, status, onDone, type }) {
           )}
         </>
       )}
+
       {done && (
         <div style={{ textAlign:'center', padding:'12px 0' }}>
           <div style={{ width:60, height:60, borderRadius:'50%', background:'#D1FAE5', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
@@ -251,7 +302,7 @@ function OfframpWidget() {
   const nairaVal = amount && rate ? Number(amount) * rate : null
 
   if (step !== 'form') return (
-    <DepositCard address={deposit?.depositAddress} coin={coin+(isStable?` (${chain})`:'`')}
+    <DepositCard address={deposit?.depositAddress} coin={coin+(isStable?` (${chain})`:'')}
       amount={deposit?.expectedAmount} timer={timer} status={status} type="offramp"
       onDone={() => { setStep('form'); setStatus('waiting'); setTimer(1800); setDeposit(null); setAmount('') }} />
   )
@@ -375,7 +426,8 @@ function SwapWidget() {
 
   if (step === 'pending') return (
     <DepositCard address={swapData?.payinAddress} coin={fromCoin} amount={swapData?.payinAmount||amount}
-      timer={0} status={swapStatus} type="swap"
+      timer={0} status={swapStatus} type="swap" swapId={swapData?.id}
+      estimate={estimate} toCoin={toCoin}
       onDone={() => { setStep('form'); setSwapStatus('waiting_for_deposit'); setSwapData(null); setAmount(''); setDestAddr('') }} />
   )
 
@@ -566,12 +618,12 @@ function Hero() {
             </a>
           </div>
 
-          {/* Stats */}
-          <div style={{ display:'flex', gap:32, flexWrap:'wrap' }}>
-            {[['15k+','Users'],['₦2.8B+','Converted'],['< 3s','Detection time'],['8','Supported coins']].map(([v, l]) => (
-              <div key={l}>
-                <div style={{ fontWeight:800, fontSize:24, color:'#4F46E5', letterSpacing:'-0.02em' }}>{v}</div>
-                <div style={{ fontSize:13, color:'#94A3B8', fontWeight:500, marginTop:2 }}>{l}</div>
+          {/* Trust badges */}
+          <div style={{ display:'flex', gap:20, flexWrap:'wrap' }}>
+            {[['< 3s','Detection'],['8 Coins','Supported'],['12+ Chains','Available']].map(([v, l]) => (
+              <div key={l} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%', background:'#10B981', flexShrink:0 }} />
+                <span style={{ fontSize:13, color:'#64748B', fontWeight:500 }}><strong style={{ color:'#0F172A' }}>{v}</strong> {l}</span>
               </div>
             ))}
           </div>
@@ -731,6 +783,62 @@ function CoinTicker() {
   )
 }
 
+// ─── Ads / Social Proof ──────────────────────────────────────────────────────
+
+function AdsSection() {
+  return (
+    <section style={{ padding:'96px 24px', background:'#fff', borderTop:'1px solid #F1F5F9' }}>
+      <div style={{ maxWidth:1140, margin:'0 auto' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center' }} className="hero-grid">
+          {/* Image */}
+          <div className="reveal" style={{ position:'relative', borderRadius:24, overflow:'hidden', boxShadow:'0 24px 60px rgba(79,70,229,0.14)' }}>
+            <img
+              src="/ads.png"
+              alt="People using CERA"
+              style={{ width:'100%', height:'auto', display:'block', borderRadius:24 }}
+            />
+            {/* Floating badge */}
+            <div style={{ position:'absolute', bottom:20, left:20, background:'rgba(255,255,255,0.96)', backdropFilter:'blur(12px)', borderRadius:14, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, boxShadow:'0 4px 20px rgba(0,0,0,0.12)' }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:'#D1FAE5', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <IcZap style={{ color:'#10B981' }} />
+              </div>
+              <div>
+                <div style={{ fontWeight:800, fontSize:14, color:'#0F172A', lineHeight:1 }}>Naira in seconds</div>
+                <div style={{ fontSize:12, color:'#64748B', marginTop:3 }}>Instant bank transfer</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Text */}
+          <div className="reveal delay-2">
+            <span className="section-label">Real People. Real Results.</span>
+            <h2 style={{ fontWeight:800, fontSize:'clamp(28px,3.8vw,44px)', color:'#0F172A', marginTop:10, letterSpacing:'-0.02em', lineHeight:1.15 }}>
+              Crypto in your pocket,{' '}
+              <span className="mark">Naira in your bank.</span>
+            </h2>
+            <p style={{ color:'#64748B', marginTop:16, fontSize:16, lineHeight:1.8, maxWidth:420 }}>
+              Thousands of Nigerians are already converting crypto to Naira on CERA — no middlemen, no delays, no stress.
+            </p>
+
+            <div style={{ marginTop:28, display:'flex', flexDirection:'column', gap:16 }}>
+              {[
+                { q:'"Received my Naira in literally 3 seconds. I thought it was a glitch."', name:'Emeka A., Lagos' },
+                { q:'"Finally stopped using P2P with its drama. CERA just works."',            name:'Tolu R., Abuja' },
+                { q:'"Used it to cash out USDT on a Sunday night. Arrived instantly."',        name:'Chioma N., PH' },
+              ].map(({ q, name }) => (
+                <div key={name} style={{ background:'#FAFBFF', border:'1px solid #EEF2FF', borderRadius:14, padding:'14px 18px' }}>
+                  <p style={{ fontSize:14, color:'#374151', lineHeight:1.65, fontStyle:'italic' }}>{q}</p>
+                  <p style={{ fontSize:12, color:'#94A3B8', fontWeight:600, marginTop:8 }}>— {name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Download ─────────────────────────────────────────────────────────────────
 
 function Download() {
@@ -820,6 +928,7 @@ export default function Home() {
       <Features />
       <WidgetSection />
       <HowItWorks />
+      <AdsSection />
       <CoinTicker />
       <Download />
       <Footer />
