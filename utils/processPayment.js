@@ -1,6 +1,7 @@
 const User        = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { getRateForCoin } = require('./coingecko');
+const { sendPush }       = require('./pushNotification');
 
 // ERC-20 / SPL token contract → symbol mapping
 const TOKEN_MAP = {
@@ -68,6 +69,11 @@ async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHa
     });
 
     console.log(`⚡ Auto-processed ${cryptoAmount} ${symbol} for user ${user.ceraTag || user.ceraId}`);
+    sendPush(user.fcmToken,
+      'Payout Sent!',
+      `₦${nairaAmount.toLocaleString('en-NG', { maximumFractionDigits: 2 })} is on its way to your bank`,
+      { type: 'payout', amountNGN: nairaAmount }
+    );
 
   } else {
     // ── MANUAL: credit Naira balance ──
@@ -91,6 +97,11 @@ async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHa
     });
 
     console.log(`💰 Credited ₦${nairaAmount.toFixed(2)} to user ${user.ceraTag || user.ceraId}`);
+    sendPush(user.fcmToken,
+      'Money Received!',
+      `You received ${cryptoAmount} ${symbol} → ₦${nairaAmount.toLocaleString('en-NG', { maximumFractionDigits: 2 })} added to your wallet`,
+      { type: 'receive', coin: symbol, cryptoAmount, amountNGN: nairaAmount }
+    );
   }
 }
 

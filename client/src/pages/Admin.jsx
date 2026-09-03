@@ -364,7 +364,7 @@ function DashboardView() {
         <StatCard label="Total Volume"     value={stats?.totalVolume ? formatNaira(stats.totalVolume) : '—'} />
         <StatCard label="Total Txns"       value={stats?.totalTxns ?? '—'} />
         <StatCard label="Active Guest Txns" value={stats?.activeGuestTxns ?? '—'} color="#FBBf24" />
-        <StatCard label="Pool Available"   value={stats?.poolAvailable ?? '—'} color="#10B981" />
+        <StatCard label="Pool Available"   value={stats?.pool?.available ?? '—'} color="#10B981" />
       </div>
 
       <h3 style={{ margin: '0 0 14px', fontFamily: 'Space Grotesk', fontSize: 16, color: '#9CA3AF', fontWeight: 600 }}>Recent Transactions</h3>
@@ -441,7 +441,7 @@ function UsersView() {
   const handleCredit = async (amount, note) => {
     setSaving(true)
     try {
-      await apiFetch(`/api/admin/users/${creditUser._id}/balance`, { method: 'POST', body: JSON.stringify({ amount: Number(amount), note }) })
+      await apiFetch(`/api/admin/users/${creditUser._id}/credit`, { method: 'POST', body: JSON.stringify({ amountNGN: Number(amount), note }) })
       showToast('Balance updated')
       setCreditUser(null)
       load()
@@ -575,8 +575,8 @@ function CreditModal({ user, onClose, onSave, saving }) {
   const [note, setNote] = useState('')
   return (
     <Modal title={`Adjust Balance — ${user.name || user.email}`} onClose={onClose} width={400}>
-      <p style={{ color: '#6B7280', marginTop: 0, fontSize: 14 }}>Positive = credit, negative = debit. Amount in Kobo.</p>
-      <FormField label="Amount (Kobo)"><input className="input-field" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 100000 = ₦1,000" /></FormField>
+      <p style={{ color: '#6B7280', marginTop: 0, fontSize: 14 }}>Positive = credit, negative = debit. Amount in Naira.</p>
+      <FormField label="Amount (NGN)"><input className="input-field" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 1000 = ₦1,000" /></FormField>
       <FormField label="Note"><input className="input-field" value={note} onChange={e => setNote(e.target.value)} placeholder="Reason for adjustment" /></FormField>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn onClick={onClose}>Cancel</ActionBtn>
@@ -724,8 +724,8 @@ function GuestTxnsView() {
     setError('')
     try {
       const q = new URLSearchParams({ page: p, limit, ...(s && { status: s }) })
-      const d = await apiFetch(`/api/admin/guest-transactions?${q}`)
-      setTxns(d.transactions || d.data || [])
+      const d = await apiFetch(`/api/admin/guest?${q}`)
+      setTxns(d.guests || [])
       setTotal(d.total || 0)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
@@ -736,7 +736,7 @@ function GuestTxnsView() {
   const handleStatusUpdate = async (txn, status) => {
     setSaving(true)
     try {
-      await apiFetch(`/api/admin/guest-transactions/${txn._id}`, { method: 'PUT', body: JSON.stringify({ status }) })
+      await apiFetch(`/api/admin/guest/${txn._id}`, { method: 'PUT', body: JSON.stringify({ status }) })
       setEditTxn(null)
       load(page)
     } catch (e) { alert(e.message) }
@@ -746,7 +746,7 @@ function GuestTxnsView() {
   const handleDelete = async id => {
     if (!window.confirm('Delete this guest transaction?')) return
     try {
-      await apiFetch(`/api/admin/guest-transactions/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/admin/guest/${id}`, { method: 'DELETE' })
       load(page)
     } catch (e) { alert(e.message) }
   }
@@ -831,8 +831,8 @@ function WalletPoolView() {
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/admin/wallets')
-      setWallets(d.wallets || d.data || d || [])
+      const d = await apiFetch('/api/admin/pool')
+      setWallets(Array.isArray(d) ? d : (d.wallets || d.data || []))
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -842,7 +842,7 @@ function WalletPoolView() {
   const handleAdd = async () => {
     setSaving(true)
     try {
-      await apiFetch('/api/admin/wallets', { method: 'POST', body: JSON.stringify(addForm) })
+      await apiFetch('/api/admin/pool', { method: 'POST', body: JSON.stringify(addForm) })
       setShowAdd(false)
       setAddForm({ label: '', turnkeyWalletId: '', evm: '', sol: '', btc: '', tron: '' })
       load()
@@ -853,7 +853,7 @@ function WalletPoolView() {
   const handleEditSave = async form => {
     setSaving(true)
     try {
-      await apiFetch(`/api/admin/wallets/${editWallet._id}`, { method: 'PUT', body: JSON.stringify(form) })
+      await apiFetch(`/api/admin/pool/${editWallet._id}`, { method: 'PUT', body: JSON.stringify(form) })
       setEditWallet(null)
       load()
     } catch (e) { alert(e.message) }
@@ -863,7 +863,7 @@ function WalletPoolView() {
   const handleRelease = async w => {
     if (!window.confirm(`Release lock on "${w.label}"?`)) return
     try {
-      await apiFetch(`/api/admin/wallets/${w._id}/release`, { method: 'POST' })
+      await apiFetch(`/api/admin/pool/${w._id}`, { method: 'PUT', body: JSON.stringify({ status: 'available', lockedBy: null, lockedAt: null }) })
       load()
     } catch (e) { alert(e.message) }
   }
@@ -871,7 +871,7 @@ function WalletPoolView() {
   const handleDelete = async id => {
     if (!window.confirm('Delete this wallet?')) return
     try {
-      await apiFetch(`/api/admin/wallets/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/admin/pool/${id}`, { method: 'DELETE' })
       load()
     } catch (e) { alert(e.message) }
   }
@@ -1152,52 +1152,60 @@ const NAV = [
   { key: 'system',       label: 'System',       Icon: IconSystem },
 ]
 
-function Sidebar({ active, onNav }) {
+function Sidebar({ active, onNav, isOpen, isMobile, onClose }) {
   return (
-    <div style={{ width: 240, minHeight: '100vh', background: '#0D0F17', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'fixed', top: 0, bottom: 0, left: 0, overflow: 'auto' }}>
-      <div style={{ padding: '24px 20px 20px' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, background: 'linear-gradient(135deg,#7C3AED,#3B82F6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>CERA</span>
-        <span style={{ display: 'block', color: '#4B5563', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>Admin Panel</span>
-      </div>
-      <nav style={{ flex: 1, padding: '8px 12px' }}>
-        {NAV.map(({ key, label, Icon }) => {
-          const isActive = active === key
-          return (
-            <button
-              key={key}
-              onClick={() => onNav(key)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                padding: '10px 12px',
-                marginBottom: 2,
-                borderRadius: 10,
-                border: 'none',
-                background: isActive ? 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(59,130,246,0.15))' : 'transparent',
-                color: isActive ? '#F9FAFB' : '#6B7280',
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: isActive ? 600 : 400,
-                fontFamily: 'Inter',
-                textAlign: 'left',
-                borderLeft: isActive ? '2px solid #7C3AED' : '2px solid transparent',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
-            >
-              <Icon />
-              {label}
+    <>
+      {isMobile && isOpen && (
+        <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 39, backdropFilter: 'blur(2px)' }} />
+      )}
+      <div style={{
+        width: 240, minHeight: '100vh', background: '#0D0F17',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', flexDirection: 'column', flexShrink: 0,
+        position: 'fixed', top: 0, bottom: 0, left: 0, overflow: 'auto',
+        zIndex: 40,
+        transform: isMobile ? (isOpen ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
+        transition: 'transform 0.25s ease',
+      }}>
+        <div style={{ padding: '24px 20px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, background: 'linear-gradient(135deg,#7C3AED,#3B82F6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>CERA</span>
+          {isMobile && (
+            <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
+              <IconClose />
             </button>
-          )
-        })}
-      </nav>
-      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 12, color: '#374151' }}>
-        CERA Admin v1.0
+          )}
+        </div>
+        <span style={{ display: 'block', color: '#4B5563', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', padding: '0 20px 12px' }}>Admin Panel</span>
+        <nav style={{ flex: 1, padding: '8px 12px' }}>
+          {NAV.map(({ key, label, Icon }) => {
+            const isActive = active === key
+            return (
+              <button
+                key={key}
+                onClick={() => onNav(key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '10px 12px', marginBottom: 2, borderRadius: 10, border: 'none',
+                  background: isActive ? 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(59,130,246,0.15))' : 'transparent',
+                  color: isActive ? '#F9FAFB' : '#6B7280', cursor: 'pointer',
+                  fontSize: 14, fontWeight: isActive ? 600 : 400, fontFamily: 'Inter',
+                  textAlign: 'left', borderLeft: isActive ? '2px solid #7C3AED' : '2px solid transparent',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+              >
+                <Icon />
+                {label}
+              </button>
+            )
+          })}
+        </nav>
+        <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 12, color: '#374151' }}>
+          CERA Admin v1.0
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -1206,8 +1214,18 @@ function Sidebar({ active, onNav }) {
 export default function Admin() {
   const [authed, setAuthed] = useState(!!localStorage.getItem('cera_admin_secret'))
   const [section, setSection] = useState('dashboard')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 900)
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 900)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
+
+  const handleNav = key => { setSection(key); setSidebarOpen(false) }
 
   const VIEW = {
     dashboard:    <DashboardView />,
@@ -1221,8 +1239,19 @@ export default function Admin() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#09090F' }}>
-      <Sidebar active={section} onNav={setSection} />
-      <main style={{ flex: 1, marginLeft: 240, padding: '32px 36px', minHeight: '100vh', overflowX: 'hidden' }}>
+      <Sidebar active={section} onNav={handleNav} isOpen={sidebarOpen} isMobile={isMobile} onClose={() => setSidebarOpen(false)} />
+      <main style={{ flex: 1, marginLeft: isMobile ? 0 : 240, padding: isMobile ? '16px' : '32px 36px', minHeight: '100vh', overflowX: 'hidden' }}>
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 9px', color: '#F9FAFB', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, background: 'linear-gradient(135deg,#7C3AED,#3B82F6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>CERA Admin</span>
+          </div>
+        )}
         {VIEW[section] || <DashboardView />}
       </main>
     </div>

@@ -535,10 +535,7 @@ function Navbar() {
       }}>
         <div style={{ maxWidth:1140, margin:'0 auto', padding:'0 24px', height:66, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <a href="/" style={{ display:'flex', alignItems:'center', gap:9, textDecoration:'none' }}>
-            <div style={{ width:34, height:34, borderRadius:9, background:'#4F46E5', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            </div>
-            <span style={{ fontWeight:800, fontSize:20, color:'#0F172A', letterSpacing:'-0.02em' }}>CERA</span>
+            <img src="/logo.png" alt="CERA" style={{ height:38, width:'auto', objectFit:'contain' }} />
           </a>
 
           <div className="nav-links">
