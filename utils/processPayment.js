@@ -77,44 +77,43 @@ async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHa
 
   } else {
     // ── MANUAL: credit Naira balance ──
-    user.balanceKobo = (user.balanceKobo || 0) + nairaKobo;
 
     // 0.5% cashback, min ₦50 (5000 kobo), max ₦5,000 (500000 kobo)
     const rawCashback = Math.round(nairaKobo * 0.005);
     const cashbackKobo = rawCashback >= 5000 ? Math.min(rawCashback, 500000) : 0;
+
+    user.balanceKobo = (user.balanceKobo || 0) + nairaKobo + cashbackKobo;
     if (cashbackKobo > 0) {
-      user.balanceKobo += cashbackKobo;
       user.cashbackEarningsKobo = (user.cashbackEarningsKobo || 0) + cashbackKobo;
     }
-
     await user.save();
 
+    // Main crypto receive transaction — shows coin logo + amount in app
     await Transaction.create({
       txId:        generateTxId(),
       txHash,
-      type:        'funding',
+      type:        'crypto_receive',
       toUser:      user._id,
       amountKobo:  nairaKobo,
       feeKobo:     0,
-      narration:   `${cryptoAmount} ${symbol} received on ${chain}`,
-      coin:        symbol,
-      chain,
-      network,
+      narration:   `${cryptoAmount} ${symbol} received and converted`,
+      crypto:      symbol,
       cryptoAmount,
-      rateUsed:    rate.priceNGN,
+      rate:        rate.priceNGN,
       status:      'completed',
     });
 
+    // Separate cashback transaction — clearly labeled
     if (cashbackKobo > 0) {
       const cashbackNaira = cashbackKobo / 100;
       await Transaction.create({
-        txId:      generateTxId(),
-        type:      'funding',
-        toUser:    user._id,
+        txId:       generateTxId(),
+        type:       'funding',
+        toUser:     user._id,
         amountKobo: cashbackKobo,
-        feeKobo:   0,
-        narration: `0.5% cashback on ${cryptoAmount} ${symbol} conversion`,
-        status:    'completed',
+        feeKobo:    0,
+        narration:  `0.5% cashback on ${cryptoAmount} ${symbol} conversion`,
+        status:     'completed',
       });
       console.log(`💸 Cashback ₦${cashbackNaira.toFixed(2)} credited to ${user.ceraTag || user.ceraId}`);
     }
