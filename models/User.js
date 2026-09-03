@@ -53,6 +53,12 @@ const userSchema = new mongoose.Schema({
     accountName: { type: String, default: null },
   },
 
+  // Referral
+  referredBy:           { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  referralCount:        { type: Number, default: 0 },
+  referralEarningsKobo: { type: Number, default: 0 },
+  cashbackEarningsKobo: { type: Number, default: 0 },
+
   // Timestamps of last on-chain poll per chain (used by pollers to fetch only new txs)
   lastTxCheck:   { type: Date, default: null },
   lastTronCheck: { type: Date, default: null },
@@ -107,6 +113,9 @@ userSchema.methods.toPublic = function () {
     autoProcessing: this.autoProcessing,
     cryptoAddresses: this.cryptoAddresses,
     walletsReady: !!(this.cryptoAddresses?.evm),
+    referralCount:    this.referralCount || 0,
+    referralEarnings: (this.referralEarningsKobo || 0) / 100,
+    cashbackEarnings: (this.cashbackEarningsKobo || 0) / 100,
     createdAt: this.createdAt,
   };
 };

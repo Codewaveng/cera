@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth');
-const { generateCeraId } = require('../utils/helpers');
+const { generateCeraId, generateTxId } = require('../utils/helpers');
 const { createUserWallet } = require('../utils/turnkey');
 const { registerBTCAddress } = require('../utils/monitor');
 const { addEVMAddress, subscribeSOLAddress } = require('../utils/blockchainWatcher');
@@ -14,7 +15,7 @@ function signToken(id) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, referralCode } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email and password are required' });
     }
@@ -25,10 +26,19 @@ router.post('/register', async (req, res) => {
     const exists = await User.findOne({ email: email.toLowerCase().trim() });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
 
+    // Validate referral code before creating user
+    let referrer = null;
+    if (referralCode && referralCode.trim()) {
+      referrer = await User.findOne({ ceraId: referralCode.trim().toUpperCase() });
+    }
+
     const ceraId = generateCeraId();
 
     // Create user first so we have their _id for the wallet name
-    const user = await User.create({ name, email, phone, password, ceraId });
+    const user = await User.create({
+      name, email, phone, password, ceraId,
+      referredBy: referrer ? referrer._id : null,
+    });
 
     // Create Turnkey wallets synchronously — user receives wallet addresses immediately
     try {
@@ -46,6 +56,42 @@ router.post('/register', async (req, res) => {
     } catch (walletErr) {
       console.error('❌ Turnkey wallet creation failed:', walletErr.message);
       // User is registered but without wallets — the receive screen auto-retry will handle it
+    }
+
+    // Credit referral bonus — ₦500 to both new user and referrer
+    if (referrer) {
+      const BONUS = 50000; // ₦500 in kobo
+      const now = new Date();
+
+      // Credit new user
+      user.balanceKobo = (user.balanceKobo || 0) + BONUS;
+      await user.save();
+      await Transaction.create({
+        txId: generateTxId(),
+        type: 'funding',
+        toUser: user._id,
+        amountKobo: BONUS,
+        feeKobo: 0,
+        narration: `Referral bonus — signed up with ${referrer.ceraId}`,
+        status: 'completed',
+      });
+
+      // Credit referrer
+      referrer.balanceKobo = (referrer.balanceKobo || 0) + BONUS;
+      referrer.referralCount = (referrer.referralCount || 0) + 1;
+      referrer.referralEarningsKobo = (referrer.referralEarningsKobo || 0) + BONUS;
+      await referrer.save();
+      await Transaction.create({
+        txId: generateTxId(),
+        type: 'funding',
+        toUser: referrer._id,
+        amountKobo: BONUS,
+        feeKobo: 0,
+        narration: `Referral bonus — ${user.name} joined with your code`,
+        status: 'completed',
+      });
+
+      console.log(`🎁 Referral bonus: ₦500 each to ${user.ceraId} and ${referrer.ceraId}`);
     }
 
     res.status(201).json({

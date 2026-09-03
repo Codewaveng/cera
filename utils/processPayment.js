@@ -78,6 +78,15 @@ async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHa
   } else {
     // ── MANUAL: credit Naira balance ──
     user.balanceKobo = (user.balanceKobo || 0) + nairaKobo;
+
+    // 0.5% cashback, min ₦50 (5000 kobo), max ₦5,000 (500000 kobo)
+    const rawCashback = Math.round(nairaKobo * 0.005);
+    const cashbackKobo = rawCashback >= 5000 ? Math.min(rawCashback, 500000) : 0;
+    if (cashbackKobo > 0) {
+      user.balanceKobo += cashbackKobo;
+      user.cashbackEarningsKobo = (user.cashbackEarningsKobo || 0) + cashbackKobo;
+    }
+
     await user.save();
 
     await Transaction.create({
@@ -95,6 +104,20 @@ async function processIncomingCrypto({ userId, cryptoAmount, symbol, chain, txHa
       rateUsed:    rate.priceNGN,
       status:      'completed',
     });
+
+    if (cashbackKobo > 0) {
+      const cashbackNaira = cashbackKobo / 100;
+      await Transaction.create({
+        txId:      generateTxId(),
+        type:      'funding',
+        toUser:    user._id,
+        amountKobo: cashbackKobo,
+        feeKobo:   0,
+        narration: `0.5% cashback on ${cryptoAmount} ${symbol} conversion`,
+        status:    'completed',
+      });
+      console.log(`💸 Cashback ₦${cashbackNaira.toFixed(2)} credited to ${user.ceraTag || user.ceraId}`);
+    }
 
     console.log(`💰 Credited ₦${nairaAmount.toFixed(2)} to user ${user.ceraTag || user.ceraId}`);
     sendPush(user.fcmToken,
