@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -25,11 +26,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
+const COIN_LOGOS = {
+  SOL:  'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+  BTC:  'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+  ETH:  'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  BNB:  'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  USDT: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  USDC: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
+  TRX:  'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+};
+
 const QUICK_ACTIONS = [
-  { label: 'Airtime',     icon: 'cellphone',       gradient: ['#F59E0B', '#D97706'], type: 'Airtime' },
-  { label: 'Data',        icon: 'wifi',            gradient: ['#0EA5E9', '#0284C7'], type: 'Data' },
-  { label: 'TV',          icon: 'television-play', gradient: ['#8B5CF6', '#7C3AED'], type: 'TV' },
-  { label: 'Electricity', icon: 'lightning-bolt',  gradient: ['#EF4444', '#DC2626'], type: 'Electricity' },
+  { label: 'Airtime',     icon: 'cellphone',       color: '#EF4444', bg: '#FEF2F2', type: 'Airtime' },
+  { label: 'Data',        icon: 'wifi',            color: '#06B6D4', bg: '#ECFEFF', type: 'Data' },
+  { label: 'TV',          icon: 'television-play', color: '#8B5CF6', bg: '#F5F3FF', type: 'TV' },
+  { label: 'Electricity', icon: 'lightning-bolt',  color: '#F59E0B', bg: '#FFFBEB', type: 'Electricity' },
 ];
 
 // ─── Animated transaction row ──────────────────────────────────────────────────
@@ -52,7 +63,7 @@ function AnimatedTxRow({ tx, index, onPress }) {
 }
 
 // ─── Quick action button ───────────────────────────────────────────────────────
-function ActionBtn({ label, icon, gradient, onPress }) {
+function ActionBtn({ label, icon, color, bg, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
   return (
     <Animated.View style={{ alignItems: 'center', flex: 1, transform: [{ scale }] }}>
@@ -68,14 +79,9 @@ function ActionBtn({ label, icon, gradient, onPress }) {
           Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 260, friction: 6 }).start()
         }
       >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.actionCircle}
-        >
-          <MaterialCommunityIcons name={icon} size={26} color="#fff" />
-        </LinearGradient>
+        <View style={[styles.actionCircle, { backgroundColor: bg }]}>
+          <MaterialCommunityIcons name={icon} size={24} color={color} />
+        </View>
         <Text style={styles.actionLabel}>{label}</Text>
       </TouchableOpacity>
     </Animated.View>
@@ -83,11 +89,13 @@ function ActionBtn({ label, icon, gradient, onPress }) {
 }
 
 // ─── In-App Toast ─────────────────────────────────────────────────────────────
-function InAppToast({ amount, onHide }) {
+function InAppToast({ amount, coin, onHide }) {
   const slideY    = useRef(new Animated.Value(180)).current;
   const scale     = useRef(new Animated.Value(0.86)).current;
   const iconScale = useRef(new Animated.Value(0)).current;
   const progress  = useRef(new Animated.Value(1)).current;
+  const [imgErr, setImgErr] = useState(false);
+  const logoUrl = coin ? COIN_LOGOS[coin.toUpperCase()] : null;
 
   useEffect(() => {
     Animated.parallel([
@@ -129,12 +137,21 @@ function InAppToast({ amount, onHide }) {
               backgroundColor: '#34D39926', borderWidth: 1.5, borderColor: '#34D3994D',
               alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               transform: [{ scale: iconScale }],
+              overflow: 'hidden',
             }}>
-              <MaterialCommunityIcons name="cash-multiple" size={28} color="#34D399" />
+              {logoUrl && !imgErr ? (
+                <Image
+                  source={{ uri: logoUrl }}
+                  style={{ width: 36, height: 36, borderRadius: 18 }}
+                  onError={() => setImgErr(true)}
+                />
+              ) : (
+                <MaterialCommunityIcons name="cash-multiple" size={28} color="#34D399" />
+              )}
             </Animated.View>
             <View style={{ flex: 1 }}>
               <Text style={{ color: '#34D399', fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 1.6, marginBottom: 4 }}>
-                MONEY RECEIVED
+                {coin ? `${coin} RECEIVED` : 'MONEY RECEIVED'}
               </Text>
               <Text style={{ color: '#fff', fontSize: 22, fontFamily: FONTS.extrabold, letterSpacing: -0.5, lineHeight: 26 }}>
                 {amount}
@@ -223,11 +240,18 @@ export default function HomeScreen({ navigation }) {
     try {
       const [meRes, txRes] = await Promise.all([getMe(), getTransactions(1)]);
       const newUser    = meRes.data.user;
-      const newBalance = newUser?.balance ?? 0;
+      const newBalance = parseFloat(newUser?.balance) || 0;
 
-      if (prevBalance.current !== null && newBalance > prevBalance.current) {
+      if (prevBalance.current !== null) {
         const diff = newBalance - prevBalance.current;
-        setToast({ amount: `+₦${diff.toLocaleString('en-NG', { minimumFractionDigits: 2 })}` });
+        if (diff > 0 && !isNaN(diff)) {
+          const latestTx = (txRes.data.transactions || [])[0];
+          const coin     = latestTx?.type === 'crypto_receive' ? (latestTx.crypto || null) : null;
+          setToast({
+            amount: `+₦${diff.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`,
+            coin,
+          });
+        }
       }
       prevBalance.current = newBalance;
       refreshUser(newUser);
@@ -364,7 +388,8 @@ export default function HomeScreen({ navigation }) {
             key={a.label}
             label={a.label}
             icon={a.icon}
-            gradient={a.gradient}
+            color={a.color}
+            bg={a.bg}
             onPress={() => navigation.navigate('Utility', { type: a.type })}
           />
         ))}
