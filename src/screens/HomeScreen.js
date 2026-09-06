@@ -26,10 +26,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width } = Dimensions.get('window');
 
 const QUICK_ACTIONS = [
-  { label: 'Airtime',     icon: 'cellphone',       color: '#EF4444', bg: '#FEF2F2', type: 'Airtime' },
-  { label: 'Data',        icon: 'wifi',            color: '#06B6D4', bg: '#ECFEFF', type: 'Data' },
-  { label: 'TV',          icon: 'television-play', color: '#8B5CF6', bg: '#F5F3FF', type: 'TV' },
-  { label: 'Electricity', icon: 'lightning-bolt',  color: '#F59E0B', bg: '#FFFBEB', type: 'Electricity' },
+  { label: 'Airtime',     icon: 'cellphone',       gradient: ['#F59E0B', '#D97706'], type: 'Airtime' },
+  { label: 'Data',        icon: 'wifi',            gradient: ['#0EA5E9', '#0284C7'], type: 'Data' },
+  { label: 'TV',          icon: 'television-play', gradient: ['#8B5CF6', '#7C3AED'], type: 'TV' },
+  { label: 'Electricity', icon: 'lightning-bolt',  gradient: ['#EF4444', '#DC2626'], type: 'Electricity' },
 ];
 
 // ─── Animated transaction row ──────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function AnimatedTxRow({ tx, index, onPress }) {
 }
 
 // ─── Quick action button ───────────────────────────────────────────────────────
-function ActionBtn({ label, icon, color, bg, onPress }) {
+function ActionBtn({ label, icon, gradient, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
   return (
     <Animated.View style={{ alignItems: 'center', flex: 1, transform: [{ scale }] }}>
@@ -68,9 +68,14 @@ function ActionBtn({ label, icon, color, bg, onPress }) {
           Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 260, friction: 6 }).start()
         }
       >
-        <View style={[styles.actionCircle, { backgroundColor: bg }]}>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
-        </View>
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.actionCircle}
+        >
+          <MaterialCommunityIcons name={icon} size={26} color="#fff" />
+        </LinearGradient>
         <Text style={styles.actionLabel}>{label}</Text>
       </TouchableOpacity>
     </Animated.View>
@@ -174,6 +179,7 @@ export default function HomeScreen({ navigation }) {
   const sheetSlide  = useRef(new Animated.Value(60)).current;
   const sheetFade   = useRef(new Animated.Value(0)).current;
   const prevBalance = useRef(null);
+  const lastTxId    = useRef(null);
 
   useEffect(() => {
     // Hero entrance
@@ -226,9 +232,18 @@ export default function HomeScreen({ navigation }) {
       prevBalance.current = newBalance;
       refreshUser(newUser);
 
-      const txns = txRes.data.transactions || [];
-      setRecentTxns(txns.slice(0, 5));
-      setTxKey((k) => k + 1); // re-trigger animations
+      const txns    = txRes.data.transactions || [];
+      const topId   = txns[0]?.txId ?? null;
+      const hasNew  = topId !== lastTxId.current;
+
+      // Only update the list + re-animate on pull-to-refresh, initial load, or when new data arrives
+      if (!silent || hasNew) {
+        setRecentTxns(txns.slice(0, 5));
+      }
+      if (hasNew) {
+        setTxKey((k) => k + 1);
+        lastTxId.current = topId;
+      }
 
       const lastCheck = await AsyncStorage.getItem('cera_last_notif_check');
       if (txns.length > 0) {
@@ -349,8 +364,7 @@ export default function HomeScreen({ navigation }) {
             key={a.label}
             label={a.label}
             icon={a.icon}
-            color={a.color}
-            bg={a.bg}
+            gradient={a.gradient}
             onPress={() => navigation.navigate('Utility', { type: a.type })}
           />
         ))}
