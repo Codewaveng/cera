@@ -19,14 +19,14 @@ const BRAND = '#7C3AED';
 
 // Brand colors + logo URLs for networks and providers
 const NETWORK_META = {
-  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://logo.clearbit.com/mtn.com' },
-  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://logo.clearbit.com/airtel.com.ng' },
-  Glo:      { color: '#009A44', textColor: '#fff',    logo: 'https://logo.clearbit.com/gloworld.com' },
-  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: 'https://logo.clearbit.com/9mobile.com.ng' },
-  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: 'https://logo.clearbit.com/dstv.com' },
-  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: 'https://logo.clearbit.com/gotvafrica.com' },
-  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: 'https://logo.clearbit.com/startimes.com.ng' },
-  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: 'https://logo.clearbit.com/showmax.com' },
+  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/MTN_logo.png/200px-MTN_logo.png' },
+  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Airtel_logo-01.png/200px-Airtel_logo-01.png' },
+  Glo:      { color: '#009A44', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/New_GLO_Logo.png/200px-New_GLO_Logo.png' },
+  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: null },
+  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/DStv_Logo_2012.png/200px-DStv_Logo_2012.png' },
+  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/GOtv_logo1.png/200px-GOtv_logo1.png' },
+  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: null },
+  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Showmax_logo.png/200px-Showmax_logo.png' },
   EKEDC:    { color: '#003399', textColor: '#fff',    logo: null },
   IKEDC:    { color: '#006633', textColor: '#fff',    logo: null },
   AEDC:     { color: '#CC0000', textColor: '#fff',    logo: null },
@@ -86,27 +86,24 @@ const CONFIG = {
   },
 };
 
-function NetworkLogo({ name, size = 44, selected, cfg }) {
+function NetworkLogo({ name, size = 44, selected }) {
   const [imgErr, setImgErr] = useState(false);
   const meta = NETWORK_META[name] || { color: '#888', textColor: '#fff', logo: null };
   const abbrev = name.length <= 4 ? name : name.slice(0, 2).toUpperCase();
 
-  const containerStyle = {
-    width: size,
-    height: size,
-    borderRadius: 14,
-    backgroundColor: selected ? meta.color : meta.color + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  };
-
   if (meta.logo && !imgErr) {
     return (
-      <View style={containerStyle}>
+      <View style={{
+        width: size, height: size, borderRadius: 12,
+        backgroundColor: '#F8F8F8',
+        borderWidth: selected ? 2 : 1,
+        borderColor: selected ? meta.color : '#E5E7EB',
+        alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
         <Image
           source={{ uri: meta.logo }}
-          style={{ width: size * 0.75, height: size * 0.75 }}
+          style={{ width: size * 0.72, height: size * 0.72 }}
           resizeMode="contain"
           onError={() => setImgErr(true)}
         />
@@ -115,7 +112,11 @@ function NetworkLogo({ name, size = 44, selected, cfg }) {
   }
 
   return (
-    <View style={containerStyle}>
+    <View style={{
+      width: size, height: size, borderRadius: 12,
+      backgroundColor: selected ? meta.color : meta.color + '18',
+      alignItems: 'center', justifyContent: 'center',
+    }}>
       <Text style={{
         color: selected ? meta.textColor : meta.color,
         fontSize: abbrev.length > 3 ? 9 : 11,
@@ -197,7 +198,7 @@ export default function UtilityScreen({ navigation, route }) {
                     onPress={() => { feedbackSelect(); setSelectedNetwork(n); }}
                     activeOpacity={0.7}
                   >
-                    <NetworkLogo name={n} size={40} selected={isSelected} cfg={cfg} />
+                    <NetworkLogo name={n} size={40} selected={isSelected} />
                     <Text style={[S.networkName, isSelected && { color: meta.color, fontFamily: FONTS.bold }]}>
                       {n}
                     </Text>
