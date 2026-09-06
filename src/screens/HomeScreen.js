@@ -56,7 +56,7 @@ function AnimatedTxRow({ tx, index, onPress }) {
   }, []);
 
   return (
-    <Animated.View style={{ opacity: fade, transform: [{ translateY: slideY }], paddingHorizontal: 14 }}>
+    <Animated.View style={{ opacity: fade, transform: [{ translateY: slideY }] }}>
       <TransactionItem tx={tx} onPress={onPress} />
     </Animated.View>
   );
@@ -416,42 +416,40 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.txCard}>
-            {txLoading && recentTxns.length === 0 ? (
-              <View style={styles.txLoader}>
-                <ActivityIndicator color="#7C3AED" size="small" />
+          {txLoading && recentTxns.length === 0 ? (
+            <View style={styles.txLoader}>
+              <ActivityIndicator color="#7C3AED" size="small" />
+            </View>
+          ) : recentTxns.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIcon}>
+                <MaterialCommunityIcons name="swap-horizontal-bold" size={28} color="#A78BFA" />
               </View>
-            ) : recentTxns.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <View style={styles.emptyIcon}>
-                  <MaterialCommunityIcons name="swap-horizontal-bold" size={28} color="#A78BFA" />
-                </View>
-                <Text style={styles.emptyTitle}>No activity yet</Text>
-                <Text style={styles.emptySubtitle}>Deposit crypto or fund your wallet to get started</Text>
-              </View>
-            ) : (
-              <>
-                {recentTxns.map((tx, i) => (
-                  <React.Fragment key={`${txKey}-${tx.txId}`}>
-                    <AnimatedTxRow
-                      tx={tx}
-                      index={i}
-                      onPress={() => navigation.navigate('Receipt', { tx })}
-                    />
-                    {i < recentTxns.length - 1 && <View style={styles.txDivider} />}
-                  </React.Fragment>
-                ))}
-                <TouchableOpacity
-                  style={styles.viewAllFooter}
-                  activeOpacity={0.7}
-                  onPress={() => { feedbackLight(); navigation.navigate('History'); }}
-                >
-                  <Text style={styles.viewAllText}>View all transactions</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#7C3AED" />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+              <Text style={styles.emptyTitle}>No activity yet</Text>
+              <Text style={styles.emptySubtitle}>Deposit crypto or fund your wallet to get started</Text>
+            </View>
+          ) : (
+            <>
+              {recentTxns.map((tx, i) => (
+                <React.Fragment key={`${txKey}-${tx.txId}`}>
+                  <AnimatedTxRow
+                    tx={tx}
+                    index={i}
+                    onPress={() => navigation.navigate('Receipt', { tx })}
+                  />
+                  {i < recentTxns.length - 1 && <View style={styles.txDivider} />}
+                </React.Fragment>
+              ))}
+              <TouchableOpacity
+                style={styles.viewAllFooter}
+                activeOpacity={0.7}
+                onPress={() => { feedbackLight(); navigation.navigate('History'); }}
+              >
+                <Text style={styles.viewAllText}>View all transactions</Text>
+                <Ionicons name="arrow-forward" size={14} color="#7C3AED" />
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </Animated.View>
 
@@ -575,31 +573,18 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#0F172A', fontSize: 18, fontFamily: FONTS.extrabold },
   seeAll: { color: '#7C3AED', fontSize: 13, fontFamily: FONTS.semibold },
 
-  txCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EDE9FE',
-    overflow: 'hidden',
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-
-  txDivider: { height: 1, backgroundColor: '#F5F3FF', marginHorizontal: 14 },
+  txDivider: { height: 1, backgroundColor: '#F1F0FF' },
 
   viewAllFooter: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 14,
-    borderTopWidth: 1, borderTopColor: '#F5F3FF',
+    paddingVertical: 16, marginTop: 4,
+    borderTopWidth: 1, borderTopColor: '#F1F0FF',
   },
   viewAllText: { color: '#7C3AED', fontSize: 13, fontFamily: FONTS.semibold },
 
   txLoader: { alignItems: 'center', paddingVertical: 44 },
 
-  emptyWrap: { alignItems: 'center', paddingVertical: 44, paddingHorizontal: 20, gap: 10 },
+  emptyWrap: { alignItems: 'center', paddingVertical: 44, gap: 10 },
   emptyIcon: {
     width: 64, height: 64, borderRadius: 20,
     backgroundColor: '#F5F3FF',

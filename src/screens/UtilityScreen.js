@@ -17,16 +17,19 @@ import AppModal from '../components/AppModal';
 
 const BRAND = '#7C3AED';
 
+// Google favicon service — reliable CDN, no auth needed, returns PNG
+const _fav = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
 // Brand colors + logo URLs for networks and providers
 const NETWORK_META = {
-  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/MTN_logo.png/200px-MTN_logo.png' },
-  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Airtel_logo-01.png/200px-Airtel_logo-01.png' },
-  Glo:      { color: '#009A44', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/New_GLO_Logo.png/200px-New_GLO_Logo.png' },
-  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: null },
-  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/DStv_Logo_2012.png/200px-DStv_Logo_2012.png' },
-  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/GOtv_logo1.png/200px-GOtv_logo1.png' },
-  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: null },
-  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Showmax_logo.png/200px-Showmax_logo.png' },
+  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: _fav('mtn.com') },
+  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: _fav('airtel.com.ng') },
+  Glo:      { color: '#009A44', textColor: '#fff',    logo: _fav('gloworld.com') },
+  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: _fav('9mobile.com.ng') },
+  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: _fav('dstv.com') },
+  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: _fav('gotvafrica.com') },
+  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: _fav('startimes.com.ng') },
+  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: _fav('showmax.com') },
   EKEDC:    { color: '#003399', textColor: '#fff',    logo: null },
   IKEDC:    { color: '#006633', textColor: '#fff',    logo: null },
   AEDC:     { color: '#CC0000', textColor: '#fff',    logo: null },
