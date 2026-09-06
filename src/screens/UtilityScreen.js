@@ -19,14 +19,14 @@ const BRAND = '#7C3AED';
 
 // Brand colors + logo URLs for networks and providers
 const NETWORK_META = {
-  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/New-mtn-logo.jpg/240px-New-mtn-logo.jpg' },
-  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Airtel_logo.svg/240px-Airtel_logo.svg.png' },
-  Glo:      { color: '#009A44', textColor: '#fff',    logo: null },
-  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: null },
-  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: null },
-  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: null },
-  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: null },
-  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: null },
+  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://logo.clearbit.com/mtn.com' },
+  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://logo.clearbit.com/airtel.com.ng' },
+  Glo:      { color: '#009A44', textColor: '#fff',    logo: 'https://logo.clearbit.com/gloworld.com' },
+  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: 'https://logo.clearbit.com/9mobile.com.ng' },
+  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: 'https://logo.clearbit.com/dstv.com' },
+  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: 'https://logo.clearbit.com/gotvafrica.com' },
+  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: 'https://logo.clearbit.com/startimes.com.ng' },
+  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: 'https://logo.clearbit.com/showmax.com' },
   EKEDC:    { color: '#003399', textColor: '#fff',    logo: null },
   IKEDC:    { color: '#006633', textColor: '#fff',    logo: null },
   AEDC:     { color: '#CC0000', textColor: '#fff',    logo: null },
