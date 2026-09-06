@@ -1,4 +1,7 @@
-node_modules
+node_modules/
 .env
 *.env
 .expo/
+firebase-service-account.json
+*.log
+.DS_Store
