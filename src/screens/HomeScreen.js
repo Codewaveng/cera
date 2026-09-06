@@ -311,21 +311,8 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.balanceSub}>Nigerian Naira</Text>
             </View>
 
-            {/* Send / Receive */}
+            {/* Deposit / Transfer */}
             <View style={styles.heroActions}>
-              <TouchableOpacity
-                style={styles.heroBtn}
-                activeOpacity={0.8}
-                onPress={() => { feedbackLight(); navigation.navigate('Send'); }}
-              >
-                <View style={styles.heroBtnIcon}>
-                  <Feather name="arrow-up-right" size={18} color="#7C3AED" />
-                </View>
-                <Text style={styles.heroBtnText}>Send</Text>
-              </TouchableOpacity>
-
-              <View style={styles.heroDivider} />
-
               <TouchableOpacity
                 style={styles.heroBtn}
                 activeOpacity={0.8}
@@ -334,7 +321,20 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.heroBtnIcon}>
                   <Feather name="arrow-down-left" size={18} color="#7C3AED" />
                 </View>
-                <Text style={styles.heroBtnText}>Receive</Text>
+                <Text style={styles.heroBtnText}>Deposit</Text>
+              </TouchableOpacity>
+
+              <View style={styles.heroDivider} />
+
+              <TouchableOpacity
+                style={styles.heroBtn}
+                activeOpacity={0.8}
+                onPress={() => { feedbackLight(); navigation.navigate('Send'); }}
+              >
+                <View style={styles.heroBtnIcon}>
+                  <Feather name="arrow-up-right" size={18} color="#7C3AED" />
+                </View>
+                <Text style={styles.heroBtnText}>Transfer</Text>
               </TouchableOpacity>
             </View>
 

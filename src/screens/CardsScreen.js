@@ -94,7 +94,7 @@ function AnimatedCard() {
         <View style={styles.cardBottom}>
           <View>
             <Text style={styles.miniLabel}>CARD HOLDER</Text>
-            <Text style={styles.cardName}>{CERA_USER.name.toUpperCase()}</Text>
+            <Text style={styles.cardName}>KERRY ROBERT</Text>
           </View>
           <View>
             <Text style={styles.miniLabel}>EXPIRES</Text>

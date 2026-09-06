@@ -260,12 +260,6 @@ export default function ReceiveScreen({ navigation }) {
 
           {walletsReady && (
             <>
-              {/* ── Network label strip ── */}
-              <View style={[S.networkStrip, { backgroundColor: accentColor + '12', borderColor: accentColor + '35' }]}>
-                <View style={[S.networkStripDot, { backgroundColor: accentColor }]} />
-                <Text style={[S.networkStripText, { color: accentColor }]}>{networkLabel}</Text>
-              </View>
-
               {/* ── QR code ── */}
               {address ? (
                 <Animated.View style={[S.qrSection, { opacity: qrOpacity, transform: [{ scale: qrScale }] }]}>
@@ -420,15 +414,6 @@ function makeStyles(C) {
     pendingIconWrap: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
     pendingTitle:    { color: C.text, fontSize: 14, fontFamily: FONTS.semibold, marginBottom: 3 },
     pendingDesc:     { color: C.textSecondary, fontSize: 12, fontFamily: FONTS.regular, lineHeight: 17 },
-
-    // Network strip
-    networkStrip: {
-      flexDirection: 'row', alignItems: 'center', gap: 8,
-      borderRadius: 50, borderWidth: 1, alignSelf: 'center',
-      paddingHorizontal: 14, paddingVertical: 7, marginBottom: 26,
-    },
-    networkStripDot:  { width: 7, height: 7, borderRadius: 4 },
-    networkStripText: { fontSize: 12, fontFamily: FONTS.semibold, letterSpacing: 0.2 },
 
     // QR section
     qrSection: { alignItems: 'center', marginBottom: 28 },
