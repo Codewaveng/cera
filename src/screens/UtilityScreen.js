@@ -6,53 +6,127 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { feedbackMedium, feedbackSelect } from '../utils/feedback';
 import AppModal from '../components/AppModal';
 
+const BRAND = '#7C3AED';
+
+// Brand colors + logo URLs for networks and providers
+const NETWORK_META = {
+  MTN:      { color: '#FFCC00', textColor: '#1A1A1A', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/New-mtn-logo.jpg/240px-New-mtn-logo.jpg' },
+  Airtel:   { color: '#E8001C', textColor: '#fff',    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Airtel_logo.svg/240px-Airtel_logo.svg.png' },
+  Glo:      { color: '#009A44', textColor: '#fff',    logo: null },
+  '9mobile':{ color: '#007B5E', textColor: '#fff',    logo: null },
+  DSTV:     { color: '#0057A8', textColor: '#fff',    logo: null },
+  GOtv:     { color: '#009EE3', textColor: '#fff',    logo: null },
+  Startimes:{ color: '#E03A00', textColor: '#fff',    logo: null },
+  ShowMax:  { color: '#1A1A1A', textColor: '#fff',    logo: null },
+  EKEDC:    { color: '#003399', textColor: '#fff',    logo: null },
+  IKEDC:    { color: '#006633', textColor: '#fff',    logo: null },
+  AEDC:     { color: '#CC0000', textColor: '#fff',    logo: null },
+  EEDC:     { color: '#FF6600', textColor: '#fff',    logo: null },
+  KAEDC:    { color: '#4B0082', textColor: '#fff',    logo: null },
+  PHEDC:    { color: '#008080', textColor: '#fff',    logo: null },
+};
+
 const CONFIG = {
   Airtime: {
-    icon: 'phone-portrait-outline',
+    icon: 'cellphone',
     color: '#EF4444',
     label: 'Airtime',
-    subtitle: 'Recharge any Nigerian number',
+    subtitle: 'Recharge any Nigerian number instantly',
     fields: [{ id: 'phone', label: 'Phone Number', placeholder: '080XXXXXXXX', keyboard: 'phone-pad' }],
     networks: ['MTN', 'Airtel', 'Glo', '9mobile'],
     amounts: ['100', '200', '500', '1000', '2000', '5000'],
   },
   Data: {
-    icon: 'wifi-outline',
+    icon: 'wifi',
     color: '#06B6D4',
-    label: 'Data',
-    subtitle: 'Buy internet data bundles',
+    label: 'Mobile Data',
+    subtitle: 'Buy data bundles for any network',
     fields: [{ id: 'phone', label: 'Phone Number', placeholder: '080XXXXXXXX', keyboard: 'phone-pad' }],
     networks: ['MTN', 'Airtel', 'Glo', '9mobile'],
-    plans: ['500MB — ₦200', '1GB — ₦350', '2GB — ₦700', '5GB — ₦1,500', '10GB — ₦3,000'],
+    plans: [
+      { id: 'p1', name: '500MB', price: '200', duration: '1 day' },
+      { id: 'p2', name: '1GB',   price: '350', duration: '30 days' },
+      { id: 'p3', name: '2GB',   price: '700', duration: '30 days' },
+      { id: 'p4', name: '5GB',   price: '1,500', duration: '30 days' },
+      { id: 'p5', name: '10GB',  price: '3,000', duration: '30 days' },
+    ],
   },
   TV: {
-    icon: 'tv-outline',
+    icon: 'television-play',
     color: '#8B5CF6',
-    label: 'TV Subscription',
-    subtitle: 'Pay for cable TV packages',
-    fields: [{ id: 'card', label: 'Smart Card / IUC Number', placeholder: 'Enter card number', keyboard: 'number-pad' }],
+    label: 'Cable TV',
+    subtitle: 'Renew your TV subscription with ease',
+    fields: [{ id: 'card', label: 'Smart Card / IUC Number', placeholder: 'Enter your card number', keyboard: 'number-pad' }],
     providers: ['DSTV', 'GOtv', 'Startimes', 'ShowMax'],
-    plans: ['DStv Padi — ₦2,500', 'DStv Yanga — ₦3,500', 'DStv Confam — ₦6,200', 'DStv Compact — ₦15,700', 'DStv Premium — ₦37,000'],
+    plans: [
+      { id: 't1', name: 'DStv Padi',    price: '2,500',  duration: '1 month' },
+      { id: 't2', name: 'DStv Yanga',   price: '3,500',  duration: '1 month' },
+      { id: 't3', name: 'DStv Confam',  price: '6,200',  duration: '1 month' },
+      { id: 't4', name: 'DStv Compact', price: '15,700', duration: '1 month' },
+      { id: 't5', name: 'DStv Premium', price: '37,000', duration: '1 month' },
+    ],
   },
   Electricity: {
-    icon: 'flash-outline',
+    icon: 'lightning-bolt',
     color: '#F59E0B',
     label: 'Electricity',
-    subtitle: 'Buy electricity units',
-    fields: [{ id: 'meter', label: 'Meter Number', placeholder: 'Enter meter number', keyboard: 'number-pad' }],
+    subtitle: 'Buy prepaid units for your meter',
+    fields: [{ id: 'meter', label: 'Meter Number', placeholder: 'Enter your meter number', keyboard: 'number-pad' }],
     providers: ['EKEDC', 'IKEDC', 'AEDC', 'EEDC', 'KAEDC', 'PHEDC'],
     amounts: ['1000', '2000', '5000', '10000', '20000'],
   },
 };
+
+function NetworkLogo({ name, size = 44, selected, cfg }) {
+  const [imgErr, setImgErr] = useState(false);
+  const meta = NETWORK_META[name] || { color: '#888', textColor: '#fff', logo: null };
+  const abbrev = name.length <= 4 ? name : name.slice(0, 2).toUpperCase();
+
+  const containerStyle = {
+    width: size,
+    height: size,
+    borderRadius: 14,
+    backgroundColor: selected ? meta.color : meta.color + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  };
+
+  if (meta.logo && !imgErr) {
+    return (
+      <View style={containerStyle}>
+        <Image
+          source={{ uri: meta.logo }}
+          style={{ width: size * 0.75, height: size * 0.75 }}
+          resizeMode="contain"
+          onError={() => setImgErr(true)}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={containerStyle}>
+      <Text style={{
+        color: selected ? meta.textColor : meta.color,
+        fontSize: abbrev.length > 3 ? 9 : 11,
+        fontFamily: FONTS.extrabold,
+        letterSpacing: 0.5,
+      }}>
+        {abbrev}
+      </Text>
+    </View>
+  );
+}
 
 export default function UtilityScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -60,138 +134,183 @@ export default function UtilityScreen({ navigation, route }) {
   const cfg = CONFIG[type] || CONFIG.Airtime;
   const S = useMemo(() => makeStyles(colors), [colors]);
 
-  const [fields, setFields] = useState({});
+  const [fields, setFields]               = useState({});
   const [selectedNetwork, setSelectedNetwork] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState('');
-  const [amount, setAmount] = useState('');
-  const [modal, setModal] = useState(false);
+  const [selectedPlan, setSelectedPlan]   = useState('');
+  const [amount, setAmount]               = useState('');
+  const [modal, setModal]                 = useState(false);
 
   const updateField = (id, val) => setFields((prev) => ({ ...prev, [id]: val }));
-  const allFilled = cfg.fields.every((f) => fields[f.id]);
-  const hasNetwork = !cfg.networks && !cfg.providers ? true : !!selectedNetwork;
-  const hasPlan = !(cfg.plans || cfg.amounts) ? true : !!(selectedPlan || amount);
-  const canPay = allFilled && hasNetwork && hasPlan;
+  const allFilled   = cfg.fields.every((f) => fields[f.id]?.trim());
+  const hasNetwork  = !(cfg.networks || cfg.providers) ? true : !!selectedNetwork;
+  const hasPlan     = !(cfg.plans || cfg.amounts) ? true : !!(selectedPlan || amount.trim());
+  const canPay      = allFilled && hasNetwork && hasPlan;
+
+  const selectedAmountForButton = cfg.plans
+    ? cfg.plans.find((p) => p.id === selectedPlan)?.price || ''
+    : selectedPlan || amount;
 
   return (
-    <SafeAreaView style={S.container} edges={['top']}>
+    <SafeAreaView style={S.root} edges={['top']}>
+
+      {/* Header */}
       <View style={S.header}>
-        <TouchableOpacity style={S.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        <TouchableOpacity style={S.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={S.title}>{cfg.label}</Text>
+        <Text style={S.headerTitle}>{cfg.label}</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={S.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
 
-        <View style={S.banner}>
-          <View style={[S.bannerIcon, { backgroundColor: cfg.color + '20' }]}>
-            <Ionicons name={cfg.icon} size={26} color={cfg.color} />
+        {/* Service hero */}
+        <View style={[S.hero, { borderLeftColor: cfg.color }]}>
+          <View style={[S.heroIcon, { backgroundColor: cfg.color + '15' }]}>
+            <MaterialCommunityIcons name={cfg.icon} size={24} color={cfg.color} />
           </View>
-          <View>
-            <Text style={S.bannerTitle}>{cfg.label}</Text>
-            <Text style={S.bannerSub}>{cfg.subtitle}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={S.heroLabel}>{cfg.label}</Text>
+            <Text style={S.heroSub}>{cfg.subtitle}</Text>
           </View>
         </View>
 
+        {/* Network / Provider selector */}
         {(cfg.networks || cfg.providers) && (
           <View style={S.section}>
-            <Text style={S.sectionLabel}>{cfg.networks ? 'NETWORK' : 'PROVIDER'}</Text>
-            <View style={S.chipGrid}>
-              {(cfg.networks || cfg.providers).map((n) => (
-                <TouchableOpacity
-                  key={n}
-                  style={[S.chip, selectedNetwork === n && { borderColor: cfg.color, backgroundColor: cfg.color + '18' }]}
-                  onPress={() => { feedbackSelect(); setSelectedNetwork(n); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[S.chipText, selectedNetwork === n && { color: cfg.color }]}>{n}</Text>
-                </TouchableOpacity>
-              ))}
+            <Text style={S.sectionLabel}>{cfg.networks ? 'SELECT NETWORK' : 'SELECT PROVIDER'}</Text>
+            <View style={S.networkGrid}>
+              {(cfg.networks || cfg.providers).map((n) => {
+                const isSelected = selectedNetwork === n;
+                const meta = NETWORK_META[n] || { color: '#888' };
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[
+                      S.networkCard,
+                      isSelected && { borderColor: meta.color, backgroundColor: meta.color + '08' },
+                    ]}
+                    onPress={() => { feedbackSelect(); setSelectedNetwork(n); }}
+                    activeOpacity={0.7}
+                  >
+                    <NetworkLogo name={n} size={40} selected={isSelected} cfg={cfg} />
+                    <Text style={[S.networkName, isSelected && { color: meta.color, fontFamily: FONTS.bold }]}>
+                      {n}
+                    </Text>
+                    {isSelected && (
+                      <View style={[S.networkCheck, { backgroundColor: meta.color }]}>
+                        <Ionicons name="checkmark" size={9} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         )}
 
+        {/* Phone / Meter / Card input fields */}
         {cfg.fields.map((f) => (
           <View key={f.id} style={S.section}>
             <Text style={S.sectionLabel}>{f.label.toUpperCase()}</Text>
-            <TextInput
-              style={S.input}
-              placeholder={f.placeholder}
-              placeholderTextColor={colors.textMuted}
-              keyboardType={f.keyboard}
-              value={fields[f.id] || ''}
-              onChangeText={(v) => updateField(f.id, v)}
-            />
+            <View style={S.inputWrap}>
+              <TextInput
+                style={S.input}
+                placeholder={f.placeholder}
+                placeholderTextColor={colors.textMuted}
+                keyboardType={f.keyboard}
+                value={fields[f.id] || ''}
+                onChangeText={(v) => updateField(f.id, v)}
+              />
+            </View>
           </View>
         ))}
 
+        {/* Plan selector (Data / TV) */}
         {cfg.plans && (
           <View style={S.section}>
             <Text style={S.sectionLabel}>SELECT PLAN</Text>
-            <View style={S.planGrid}>
-              {cfg.plans.map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  style={[S.planCard, selectedPlan === p && { borderColor: cfg.color, backgroundColor: cfg.color + '14' }]}
-                  onPress={() => setSelectedPlan(p)}
-                  activeOpacity={0.7}
-                >
-                  {selectedPlan === p && (
-                    <View style={[S.planCheck, { backgroundColor: cfg.color }]}>
-                      <Ionicons name="checkmark" size={10} color="#fff" />
+            <View style={S.planList}>
+              {cfg.plans.map((p) => {
+                const isSelected = selectedPlan === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[S.planRow, isSelected && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]}
+                    onPress={() => { feedbackSelect(); setSelectedPlan(p.id); }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={S.planLeft}>
+                      <Text style={[S.planName, isSelected && { color: cfg.color }]}>{p.name}</Text>
+                      <Text style={S.planDuration}>{p.duration}</Text>
                     </View>
-                  )}
-                  <Text style={[S.planText, selectedPlan === p && { color: cfg.color }]}>{p}</Text>
-                </TouchableOpacity>
-              ))}
+                    <View style={S.planRight}>
+                      <Text style={[S.planPrice, isSelected && { color: cfg.color }]}>₦{p.price}</Text>
+                      <View style={[
+                        S.planRadio,
+                        isSelected
+                          ? { backgroundColor: cfg.color, borderColor: cfg.color }
+                          : { borderColor: colors.border },
+                      ]}>
+                        {isSelected && <View style={S.planRadioDot} />}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         )}
 
+        {/* Quick amount selector (Airtime / Electricity) */}
         {cfg.amounts && (
           <View style={S.section}>
             <Text style={S.sectionLabel}>AMOUNT (₦)</Text>
             <View style={S.amountGrid}>
-              {cfg.amounts.map((a) => (
-                <TouchableOpacity
-                  key={a}
-                  style={[S.amtChip, selectedPlan === a && { borderColor: cfg.color, backgroundColor: cfg.color + '18' }]}
-                  onPress={() => { setSelectedPlan(a); setAmount(a); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[S.amtText, selectedPlan === a && { color: cfg.color }]}>
-                    ₦{parseInt(a).toLocaleString()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {cfg.amounts.map((a) => {
+                const isSelected = selectedPlan === a;
+                return (
+                  <TouchableOpacity
+                    key={a}
+                    style={[S.amtChip, isSelected && { borderColor: cfg.color, backgroundColor: cfg.color + '12' }]}
+                    onPress={() => { feedbackSelect(); setSelectedPlan(a); setAmount(a); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[S.amtText, isSelected && { color: cfg.color, fontFamily: FONTS.bold }]}>
+                      ₦{parseInt(a).toLocaleString()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <TextInput
-              style={[S.input, { marginTop: 12 }]}
-              placeholder="Or enter custom amount"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              value={amount}
-              onChangeText={(v) => { setAmount(v); setSelectedPlan(''); }}
-            />
+            <View style={[S.inputWrap, { marginTop: 12 }]}>
+              <TextInput
+                style={S.input}
+                placeholder="Or enter a custom amount"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                value={amount}
+                onChangeText={(v) => { setAmount(v); setSelectedPlan(''); }}
+              />
+            </View>
           </View>
         )}
 
+        {/* Pay button */}
         <TouchableOpacity
-          activeOpacity={canPay ? 0.8 : 1}
-          style={[S.payBtn, !canPay && { opacity: 0.4 }]}
+          style={[S.payBtn, { backgroundColor: canPay ? cfg.color : colors.border }]}
+          activeOpacity={canPay ? 0.82 : 1}
           disabled={!canPay}
           onPress={() => { feedbackMedium(); setModal(true); }}
         >
-          <LinearGradient
-            colors={[cfg.color, cfg.color + 'CC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={S.payBtnInner}
-          >
-            <Text style={S.payBtnText}>Pay Now</Text>
-            <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-          </LinearGradient>
+          <Text style={S.payBtnText}>
+            {selectedAmountForButton ? `Pay ₦${selectedAmountForButton}` : 'Pay Now'}
+          </Text>
+          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </TouchableOpacity>
 
       </ScrollView>
@@ -211,81 +330,87 @@ export default function UtilityScreen({ navigation, route }) {
 
 function makeStyles(C) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.bg },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
-    title: { color: C.text, fontSize: 18, fontFamily: FONTS.bold },
-    scroll: { paddingHorizontal: 20, paddingBottom: 60 },
-
-    banner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-      backgroundColor: C.card,
-      borderRadius: 18,
-      padding: 16,
-      marginBottom: 22,
-      borderWidth: 1,
-      borderColor: C.border,
+    root:   { flex: 1, backgroundColor: C.bg },
+    header: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 20, paddingVertical: 12,
     },
-    bannerIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    bannerTitle: { color: C.text, fontSize: 16, fontFamily: FONTS.bold },
-    bannerSub: { color: C.textSecondary, fontSize: 12, fontFamily: FONTS.regular, marginTop: 3 },
-
-    section: { marginBottom: 20 },
-    sectionLabel: { color: C.textMuted, fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 1, marginBottom: 10 },
-
-    chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    chip: {
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: C.border,
-      backgroundColor: C.card,
-      paddingHorizontal: 18,
-      paddingVertical: 10,
+    backBtn: {
+      width: 38, height: 38, borderRadius: 12,
+      backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: C.border,
     },
-    chipText: { color: C.textSecondary, fontSize: 13, fontFamily: FONTS.semibold },
+    headerTitle: { color: C.text, fontSize: 17, fontFamily: FONTS.bold },
+    scroll: { paddingHorizontal: 20, paddingBottom: 50 },
 
+    hero: {
+      flexDirection: 'row', alignItems: 'center', gap: 14,
+      borderLeftWidth: 3, paddingLeft: 14, marginBottom: 26, marginTop: 4,
+    },
+    heroIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    heroLabel: { color: C.text, fontSize: 16, fontFamily: FONTS.bold },
+    heroSub:   { color: C.textSecondary, fontSize: 12, fontFamily: FONTS.regular, marginTop: 2, lineHeight: 18 },
+
+    section:      { marginBottom: 22 },
+    sectionLabel: { color: C.textMuted, fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 1.2, marginBottom: 12 },
+
+    // Network / provider grid
+    networkGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    networkCard: {
+      width: '47%',
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      borderRadius: 14, borderWidth: 1.5, borderColor: C.border,
+      backgroundColor: C.card, paddingHorizontal: 12, paddingVertical: 12,
+      position: 'relative',
+    },
+    networkName:  { color: C.textSecondary, fontSize: 13, fontFamily: FONTS.semibold },
+    networkCheck: {
+      position: 'absolute', top: 6, right: 6,
+      width: 16, height: 16, borderRadius: 8,
+      alignItems: 'center', justifyContent: 'center',
+    },
+
+    // Input
+    inputWrap: {
+      borderRadius: 14, borderWidth: 1, borderColor: C.border,
+      backgroundColor: C.card, overflow: 'hidden',
+    },
     input: {
-      backgroundColor: C.inputBg,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: C.border,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      color: C.text,
-      fontSize: 15,
-      fontFamily: FONTS.medium,
+      paddingHorizontal: 14, paddingVertical: 14,
+      color: C.text, fontSize: 15, fontFamily: FONTS.medium,
     },
 
-    planGrid: { gap: 8 },
-    planCard: {
-      borderRadius: 13,
-      borderWidth: 1.5,
-      borderColor: C.border,
-      backgroundColor: C.card,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
+    // Plan list (Data / TV)
+    planList: { gap: 8 },
+    planRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      borderRadius: 14, borderWidth: 1.5, borderColor: C.border,
+      backgroundColor: C.card, paddingHorizontal: 14, paddingVertical: 13,
     },
-    planCheck: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-    planText: { color: C.text, fontSize: 14, fontFamily: FONTS.medium },
+    planLeft:    { flex: 1 },
+    planName:    { color: C.text, fontSize: 14, fontFamily: FONTS.semibold },
+    planDuration:{ color: C.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginTop: 2 },
+    planRight:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    planPrice:   { color: C.text, fontSize: 14, fontFamily: FONTS.bold },
+    planRadio: {
+      width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    planRadioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
 
+    // Amount chips
     amountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     amtChip: {
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: C.border,
-      backgroundColor: C.card,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      borderRadius: 12, borderWidth: 1.5, borderColor: C.border,
+      backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 11,
     },
     amtText: { color: C.text, fontSize: 13, fontFamily: FONTS.semibold },
 
-    payBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
-    payBtnInner: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    payBtnText: { color: '#FFFFFF', fontSize: 16, fontFamily: FONTS.bold },
+    // Pay button
+    payBtn: {
+      height: 56, borderRadius: 16, marginTop: 8,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    },
+    payBtnText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
   });
 }
