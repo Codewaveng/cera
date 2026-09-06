@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "CERA",
+    "slug": "cera",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.rampng.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.rampng.app"
+    },
+    "plugins": [
+      "expo-local-authentication"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a158fdf4-8d03-477d-92b1-cd9fb79d21e5"
+      }
+    },
+    "owner": "beebrain123"
+  }
+}
