@@ -1,10 +1,41 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 
 const BRAND = '#7C3AED';
+
+const COIN_LOGOS = {
+  SOL:  'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+  BTC:  'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+  ETH:  'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  BNB:  'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  USDT: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  USDC: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
+  TRX:  'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+  MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+};
+
+function CryptoLogo({ symbol }) {
+  const [err, setErr] = useState(false);
+  const url = symbol ? COIN_LOGOS[symbol.toUpperCase()] : null;
+  if (url && !err) {
+    return (
+      <Image
+        source={{ uri: url }}
+        style={{ width: 46, height: 46, borderRadius: 14 }}
+        resizeMode="cover"
+        onError={() => setErr(true)}
+      />
+    );
+  }
+  return (
+    <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: BRAND + '12', alignItems: 'center', justifyContent: 'center' }}>
+      <MaterialCommunityIcons name="arrow-collapse-down" size={20} color={BRAND} />
+    </View>
+  );
+}
 
 function parseCryptoNarration(tx) {
   if (tx.crypto && tx.cryptoAmount != null) {
@@ -29,7 +60,6 @@ const TYPE_CONFIG = {
     getType:  () => 'CERA Transfer',
   },
   crypto_receive: {
-    icon: 'arrow-collapse-down',
     sign: '+', incoming: true,
     getTitle: (tx) => {
       const { symbol, amount } = parseCryptoNarration(tx);
@@ -50,18 +80,18 @@ const TYPE_CONFIG = {
     sign: '-', incoming: false,
     getIcon: (tx) => {
       const n = (tx.narration || '').toLowerCase();
-      if (n.includes('airtime'))                           return 'cellphone';
-      if (n.includes('data'))                              return 'wifi';
-      if (n.includes('tv') || n.includes('cable'))         return 'television-play';
+      if (n.includes('airtime'))                            return 'cellphone';
+      if (n.includes('data'))                               return 'wifi';
+      if (n.includes('tv') || n.includes('cable'))          return 'television-play';
       if (n.includes('electricity') || n.includes('power')) return 'lightning-bolt';
       return 'receipt';
     },
     getTitle: (tx) => tx.narration || 'Utility',
     getType: (tx) => {
       const n = (tx.narration || '').toLowerCase();
-      if (n.includes('airtime'))                           return 'Airtime';
-      if (n.includes('data'))                              return 'Mobile Data';
-      if (n.includes('tv') || n.includes('cable'))         return 'Cable TV';
+      if (n.includes('airtime'))                            return 'Airtime';
+      if (n.includes('data'))                               return 'Mobile Data';
+      if (n.includes('tv') || n.includes('cable'))          return 'Cable TV';
       if (n.includes('electricity') || n.includes('power')) return 'Electricity';
       return 'Bill Payment';
     },
@@ -99,16 +129,24 @@ export default function TransactionItem({ tx, onPress }) {
   const { colors } = useTheme();
   const S = useMemo(() => makeStyles(colors), [colors]);
 
-  const type   = TYPE_CONFIG[tx.type] || TYPE_CONFIG.cera_transfer_in;
-  const icon   = type.getIcon ? type.getIcon(tx) : type.icon;
+  const isCrypto = tx.type === 'crypto_receive';
+  const type     = TYPE_CONFIG[tx.type] || TYPE_CONFIG.cera_transfer_in;
+  const icon     = type.getIcon ? type.getIcon(tx) : type.icon;
+  const { symbol } = isCrypto ? parseCryptoNarration(tx) : {};
+
   const amountFormatted = `${type.sign}₦${(tx.amount ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-  const amountColor = type.incoming ? colors.success : colors.text;
+  const amountColor     = type.incoming ? colors.success : colors.text;
 
   return (
     <TouchableOpacity style={S.row} onPress={onPress} activeOpacity={0.65}>
-      <View style={S.iconCircle}>
-        <MaterialCommunityIcons name={icon} size={20} color={BRAND} />
-      </View>
+
+      {isCrypto ? (
+        <CryptoLogo symbol={symbol} />
+      ) : (
+        <View style={S.iconCircle}>
+          <MaterialCommunityIcons name={icon} size={20} color={BRAND} />
+        </View>
+      )}
 
       <View style={S.middle}>
         <Text style={S.title} numberOfLines={1}>{type.getTitle(tx)}</Text>
@@ -119,6 +157,7 @@ export default function TransactionItem({ tx, onPress }) {
         <Text style={[S.amount, { color: amountColor }]}>{amountFormatted}</Text>
         <Text style={S.date}>{formatDate(tx.createdAt)}</Text>
       </View>
+
     </TouchableOpacity>
   );
 }
@@ -129,7 +168,6 @@ function makeStyles(C) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 13,
-      backgroundColor: C.bg,
     },
     iconCircle: {
       width: 46,

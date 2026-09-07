@@ -257,10 +257,11 @@ async function pollAllUsers() {
         allTxs.push(...tronTxs);
       }
 
-      if (sol) {
-        const solTxs = await checkSolana(sol, since);
-        allTxs.push(...solTxs);
-      }
+      // Solana is handled real-time by blockchainWatcher.js WebSocket — polling here causes duplicates
+      // if (sol) {
+      //   const solTxs = await checkSolana(sol, since);
+      //   allTxs.push(...solTxs);
+      // }
 
       for (const tx of allTxs) {
         await processIncomingCrypto({ userId: user._id, ...tx });
