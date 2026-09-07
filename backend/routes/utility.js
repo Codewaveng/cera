@@ -10,11 +10,34 @@ const CK_USER   = process.env.CLUBKONNECT_USER_ID;
 const CK_KEY    = process.env.CLUBKONNECT_API_KEY;
 const CB_URL    = `${process.env.SERVER_URL || 'https://cera-hdj9.onrender.com'}/api/utility/callback`;
 
-const NETWORK_CODES = { MTN: '01', Glo: '02', '9mobile': '03', Airtel: '04' };
-const DISCO_CODES   = {
+const NETWORK_CODES   = { MTN: '01', Glo: '02', '9mobile': '03', Airtel: '04' };
+const CK_NET_KEYS     = { MTN: 'MTN', Glo: 'Glo', '9mobile': 'm_9mobile', Airtel: 'Airtel' };
+const DISCO_CODES     = {
   EKEDC: '01', IKEDC: '02', AEDC: '03', KAEDC: '04',
   PHEDC: '05', EEDC:  '06', JEDC: '07', BEDC:  '08', YEDC: '09',
 };
+
+function parseCkDuration(name) {
+  if (/night/i.test(name))   return 'Night';
+  if (/weekend/i.test(name)) return 'Weekend';
+  const m = name.match(/-\s*(\d+\s*(?:day|days|month|months|week|weeks))/i);
+  if (m) return m[1].trim();
+  if (/weekly/i.test(name))  return '7 days';
+  if (/monthly/i.test(name)) return '30 days';
+  return '';
+}
+
+function parseCkShortName(name) {
+  const m = name.match(/^([\d.]+\s*(?:MB|GB|TB))/i);
+  return m ? m[1] : name.split(' - ')[0];
+}
+
+function parseCkTag(name) {
+  if (/\(SME\)/i.test(name))         return 'SME';
+  if (/Awoof/i.test(name))           return 'Awoof';
+  if (/Direct\s*Data/i.test(name))   return 'Direct';
+  return null;
+}
 
 function genTxId() {
   return `UTIL${Date.now()}${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -36,16 +59,24 @@ router.get('/data-plans', auth, async (req, res) => {
     const netCode = NETWORK_CODES[network];
     if (!netCode) return res.status(400).json({ error: 'Invalid network' });
 
-    const ck = await ckGet(`APIDatabundleListV1.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&MobileNetwork=${netCode}`);
-    console.log('[DataPlans]', network, JSON.stringify(ck).slice(0, 300));
+    const ck     = await ckGet(`APIDatabundlePlansV2.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&MobileNetwork=${netCode}`);
+    const netKey = CK_NET_KEYS[network];
+    const netArr = ck?.MOBILE_NETWORK?.[netKey];
+    const raw    = Array.isArray(netArr) && netArr[0]?.PRODUCT ? netArr[0].PRODUCT : [];
 
-    const raw = Array.isArray(ck) ? ck : (ck?.data ?? []);
-    const plans = raw.map(p => ({
-      code:     String(p.dataplan_id     ?? p.DATAPLAN_ID     ?? p.id       ?? ''),
-      name:     String(p.dataplan_name   ?? p.DATAPLAN_NAME   ?? p.name     ?? ''),
-      price:    parseFloat(p.dataplan_amount ?? p.DATAPLAN_AMOUNT ?? p.amount ?? 0),
-      duration: String(p.dataplan_validity ?? p.DATAPLAN_VALIDITY ?? p.validity ?? ''),
-    })).filter(p => p.code && p.name && p.price > 0);
+    console.log('[DataPlans]', network, `${raw.length} plans`);
+
+    const plans = raw.map(p => {
+      const fullName = String(p.PRODUCT_NAME ?? '');
+      return {
+        code:     String(p.PRODUCT_CODE ?? ''),
+        name:     parseCkShortName(fullName),
+        price:    Math.round(parseFloat(p.PRODUCT_AMOUNT ?? 0)),
+        duration: parseCkDuration(fullName),
+        tag:      parseCkTag(fullName),
+        fullName,
+      };
+    }).filter(p => p.code && p.name && p.price > 0);
 
     res.json(plans);
   } catch (err) {
