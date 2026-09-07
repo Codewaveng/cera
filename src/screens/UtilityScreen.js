@@ -615,7 +615,7 @@ export default function UtilityScreen({ navigation, route }) {
         <TouchableOpacity
           style={[S.payBtn, { backgroundColor: canPay ? cfg.color : colors.border }]}
           activeOpacity={canPay ? 0.82 : 1}
-          disabled={!canPay || loading}
+          disabled={!canPay}
           onPress={() => { feedbackMedium(); setConfirm(true); }}
         >
           <Text style={S.payBtnTxt}>{payAmount > 0 ? `Pay ₦${payAmount.toLocaleString('en-NG')}` : 'Pay Now'}</Text>
