@@ -19,6 +19,7 @@ const adminRoutes     = require('./routes/admin');
 const webhookRoutes   = require('./routes/webhook');
 const changenowRoutes = require('./routes/changenow');
 const guestRoutes     = require('./routes/guest');
+const utilityRoutes   = require('./routes/utility');
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use('/api/admin',      adminRoutes);
 app.use('/api/webhook',    webhookRoutes);
 app.use('/api/changenow',  changenowRoutes);
 app.use('/api/guest',      guestRoutes);
+app.use('/api/utility',    utilityRoutes);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', app: 'CERA API' }));
 
