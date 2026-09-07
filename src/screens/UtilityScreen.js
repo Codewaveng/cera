@@ -277,40 +277,46 @@ export default function UtilityScreen({ navigation, route }) {
   const [customAmt,    setCustomAmt]    = useState('');
   const [meterType,    setMeterType]    = useState('Prepaid');
 
-  // CK dynamic plans (replaces hardcoded when available)
-  const [ckPlans,      setCkPlans]      = useState(null);
+  // CK dynamic plans — null=loading, false=failed/fallback, object=success
+  const [ckPlans,   setCkPlans]   = useState(null);
+  const [ckLoading, setCkLoading] = useState(false);
   const fetchedFor = useRef('');
 
   // UI state
   const [confirm, setConfirm] = useState(false);
 
-  // Background-fetch real CK plans when network is selected in Data mode
+  // Fetch real CK plans when network is selected in Data mode.
+  // While loading: show skeleton (never switch plans mid-selection).
+  // On failure: fall back to hardcoded DATA_PLANS.
   useEffect(() => {
     if (!isData || !selectedNet || fetchedFor.current === selectedNet) return;
     fetchedFor.current = selectedNet;
     setCkPlans(null);
+    setCkLoading(true);
     getDataPlans(selectedNet)
       .then(res => {
         const plans = Array.isArray(res.data) && res.data.length > 0 ? res.data : null;
-        setCkPlans(plans ? buildDynamicTabs(plans) : {});
+        setCkPlans(plans ? buildDynamicTabs(plans) : false);
       })
-      .catch(() => setCkPlans({}));
+      .catch(() => setCkPlans(false))
+      .finally(() => setCkLoading(false));
   }, [isData, selectedNet]);
 
-  // Prefer live CK plans; fall back to hardcoded immediately
+  // While loading: null (skeleton). On success: CK. On fail: fallback.
   const planSource = useMemo(() => {
     if (!isData || !selectedNet) return {};
+    if (ckLoading || ckPlans === null) return null;
     if (ckPlans && Object.keys(ckPlans).some(k => (ckPlans[k]?.length ?? 0) > 0)) return ckPlans;
     return DATA_PLANS[selectedNet] || {};
-  }, [isData, selectedNet, ckPlans]);
+  }, [isData, selectedNet, ckPlans, ckLoading]);
 
   const availableTabs = useMemo(() =>
-    TAB_ORDER.filter(t => planSource[t]?.length > 0),
+    planSource ? TAB_ORDER.filter(t => planSource[t]?.length > 0) : [],
     [planSource],
   );
 
   const activePlans = useMemo(() => {
-    if (isData) return planSource[planTab] || [];
+    if (isData) return planSource ? (planSource[planTab] || []) : [];
     if (isTV)   return TV_PLANS[selectedNet] || [];
     return [];
   }, [isData, isTV, selectedNet, planTab, planSource]);
@@ -337,7 +343,7 @@ export default function UtilityScreen({ navigation, route }) {
     setSelectedNet(n);
     setSelectedCode('');
     setPlanTab('hot');
-    if (isData) { setCkPlans(null); fetchedFor.current = ''; }
+    if (isData) { setCkPlans(null); setCkLoading(false); fetchedFor.current = ''; }
   }
 
   function selectTab(t) { feedbackSelect(); setPlanTab(t); setSelectedCode(''); }
@@ -514,6 +520,12 @@ export default function UtilityScreen({ navigation, route }) {
               <View style={S.emptyNetPrompt}>
                 <MaterialCommunityIcons name="wifi-off" size={32} color={colors.textMuted} />
                 <Text style={[S.emptyNetTxt, { color: colors.textMuted }]}>Select a network above to see plans</Text>
+              </View>
+            ) : planSource === null ? (
+              /* Loading skeleton — prevents plans from switching mid-selection */
+              <View style={S.emptyNetPrompt}>
+                <MaterialCommunityIcons name="wifi" size={32} color={cfg.color} />
+                <Text style={[S.emptyNetTxt, { color: colors.textMuted }]}>Loading {selectedNet} plans…</Text>
               </View>
             ) : (
               <>
