@@ -82,7 +82,7 @@ router.post('/airtime', auth, async (req, res) => {
     await Transaction.create({
       txId:      genTxId(),
       type:      'utility',
-      user:      user._id,
+      fromUser:  user._id,
       amountKobo: amtKobo,
       narration: `${network} Airtime - ${phone}`,
       reference: ck.orderid || requestId,
@@ -124,7 +124,7 @@ router.post('/data', auth, async (req, res) => {
     await Transaction.create({
       txId:      genTxId(),
       type:      'utility',
-      user:      user._id,
+      fromUser:  user._id,
       amountKobo: amtKobo,
       narration: `${network} ${planName} Data - ${phone}`,
       reference: ck.orderid || requestId,
@@ -163,7 +163,7 @@ router.post('/tv', auth, async (req, res) => {
     await Transaction.create({
       txId:      genTxId(),
       type:      'utility',
-      user:      user._id,
+      fromUser:  user._id,
       amountKobo: amtKobo,
       narration: `${provider} ${packageName} TV Subscription - ${smartCard}`,
       reference: ck.orderid || requestId,
@@ -207,7 +207,7 @@ router.post('/electricity', auth, async (req, res) => {
     await Transaction.create({
       txId:      genTxId(),
       type:      'utility',
-      user:      user._id,
+      fromUser:  user._id,
       amountKobo: amtKobo,
       narration: `${disco} Electricity Units - Meter ${meterNo}`,
       reference: ck.orderid || requestId,

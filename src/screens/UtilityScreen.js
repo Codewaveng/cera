@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import { feedbackMedium, feedbackSelect } from '../utils/feedback';
-import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans } from '../services/api';
+import { feedbackMedium, feedbackSelect, feedbackError } from '../utils/feedback';
+import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans, verifyPin } from '../services/api';
 
 const BRAND = '#7C3AED';
 const _fav  = d => `https://www.google.com/s2/favicons?domain=${d}&sz=128`;
@@ -33,7 +33,7 @@ const NETWORK_META = {
   YEDC:      { color: '#800000', textColor: '#fff',    logo: _fav('yedc.com.ng') },
 };
 
-// Real Nigerian standard data plans — codes must match your ClubKonnect dashboard plan IDs
+// Hardcoded real Nigerian standard data plans — used as fallback if CK API fetch fails
 const DATA_PLANS = {
   MTN: {
     hot: [
@@ -41,7 +41,7 @@ const DATA_PLANS = {
       { code: 'mtn-1gb-7d',     name: '1GB',    price: 500,   duration: '7 Days',   tag: 'Best Value' },
       { code: 'mtn-6gb-30d',    name: '6GB',    price: 2000,  duration: '30 Days',  tag: 'Hot' },
       { code: 'mtn-3gb-30d',    name: '3GB',    price: 1500,  duration: '30 Days' },
-      { code: 'mtn-1gb-night',  name: '1GB',    price: 50,    duration: 'Night Only', tag: 'Night' },
+      { code: 'mtn-1gb-night',  name: '1GB',    price: 50,    duration: 'Night Only',tag: 'Night' },
     ],
     daily: [
       { code: 'mtn-200mb-1d',   name: '200MB',  price: 200,   duration: '1 Day' },
@@ -72,7 +72,6 @@ const DATA_PLANS = {
       { code: 'mtn-5gb-night',  name: '5GB',    price: 200,   duration: 'Midnight – 5am' },
     ],
   },
-
   Airtel: {
     hot: [
       { code: 'airtl-2gb-1d',   name: '2GB',    price: 500,   duration: '1 Day',    tag: 'Popular' },
@@ -100,7 +99,6 @@ const DATA_PLANS = {
       { code: 'airtl-40gb-30d', name: '40GB',   price: 8000,  duration: '30 Days' },
     ],
   },
-
   Glo: {
     hot: [
       { code: 'glo-1.35gb-14d', name: '1.35GB', price: 500,   duration: '14 Days',  tag: 'Popular' },
@@ -125,14 +123,12 @@ const DATA_PLANS = {
       { code: 'glo-12gb-30d',   name: '12GB',   price: 3000,  duration: '30 Days' },
       { code: 'glo-18gb-30d',   name: '18GB',   price: 4000,  duration: '30 Days' },
       { code: 'glo-30gb-30d',   name: '30GB',   price: 6000,  duration: '30 Days' },
-      { code: 'glo-50gb-30d',   name: '50GB',   price: 10000, duration: '30 Days' },
     ],
     night: [
       { code: 'glo-1.5gb-night',name: '1.5GB',  price: 200,   duration: 'Midnight – 5am', tag: 'Popular' },
       { code: 'glo-3gb-night',  name: '3GB',    price: 500,   duration: 'Midnight – 5am' },
     ],
   },
-
   '9mobile': {
     hot: [
       { code: '9mob-150mb-1d',  name: '150MB',  price: 200,   duration: '1 Day' },
@@ -153,7 +149,6 @@ const DATA_PLANS = {
       { code: '9mob-2.5gb-30d', name: '2.5GB',  price: 2000,  duration: '30 Days',  tag: 'Hot' },
       { code: '9mob-5gb-30d',   name: '5GB',    price: 3000,  duration: '30 Days' },
       { code: '9mob-11.5gb-30d',name: '11.5GB', price: 5000,  duration: '30 Days' },
-      { code: '9mob-22gb-30d',  name: '22GB',   price: 8000,  duration: '30 Days' },
     ],
   },
 };
@@ -162,27 +157,21 @@ const TAB_ORDER  = ['hot', 'daily', 'weekly', 'monthly', 'night'];
 const TAB_LABELS = { hot: 'Hot', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', night: 'Night' };
 const TAB_ICONS  = { hot: 'fire', daily: 'weather-sunny', weekly: 'calendar-week', monthly: 'calendar-month', night: 'weather-night' };
 
-// Categorise a ClubKonnect plan by its validity string
-function tabForDuration(duration) {
-  const d = (duration || '').toLowerCase();
-  if (d.includes('night') || d.includes('mid') || d.includes('12am') || d.includes('5am')) return 'night';
-  if (d.match(/\b1\s*day\b/)  || d.includes('24h') || d.includes('1day'))  return 'daily';
-  if (d.match(/\b(7|14)\s*day/) || d.includes('week'))                       return 'weekly';
+function tabForDuration(d) {
+  const s = (d || '').toLowerCase();
+  if (s.includes('night') || s.includes('mid') || s.includes('12am')) return 'night';
+  if (s.match(/\b1\s*day\b/) || s.includes('24h'))                     return 'daily';
+  if (s.match(/\b(7|14)\s*day/) || s.includes('week'))                 return 'weekly';
   return 'monthly';
 }
 
-// Build tab-keyed plan map from a flat CK plan array
 function buildDynamicTabs(plans) {
-  const cats = { daily: [], weekly: [], monthly: [], night: [], hot: [] };
-  for (const p of plans) {
-    const cat = tabForDuration(p.duration);
-    cats[cat].push(p);
-  }
-  // Hot = best value plan from each category (cheapest per GB proxy: lowest price per plan chosen)
+  const cats = { daily: [], weekly: [], monthly: [], night: [] };
+  for (const p of plans) cats[tabForDuration(p.duration)].push(p);
   const hot = [];
-  for (const tab of ['daily', 'weekly', 'monthly', 'night']) {
-    const sorted = [...(cats[tab] || [])].sort((a, b) => a.price - b.price);
-    if (sorted[0]) hot.push({ ...sorted[0], tag: tab === 'daily' ? 'Daily Pick' : tab === 'weekly' ? 'Weekly Pick' : tab === 'night' ? 'Night' : 'Monthly Pick' });
+  for (const t of ['daily', 'weekly', 'monthly', 'night']) {
+    const sorted = [...(cats[t] || [])].sort((a, b) => a.price - b.price);
+    if (sorted[0]) hot.push({ ...sorted[0], tag: t === 'night' ? 'Night' : t === 'daily' ? 'Daily Pick' : t === 'weekly' ? 'Weekly Pick' : 'Monthly Pick' });
     if (sorted[1]) hot.push(sorted[1]);
   }
   cats.hot = hot.slice(0, 6);
@@ -233,35 +222,104 @@ const SERVICE_CFG = {
 
 function NetworkLogo({ name, size = 44, selected }) {
   const [err, setErr] = useState(false);
-  const meta   = NETWORK_META[name] || { color: '#888', textColor: '#fff', logo: null };
+  const meta = NETWORK_META[name] || { color: '#888', textColor: '#fff', logo: null };
   const abbrev = name.length <= 4 ? name : name.slice(0, 2).toUpperCase();
   if (meta.logo && !err) {
     return (
-      <View style={{
-        width: size, height: size, borderRadius: size * 0.27,
-        backgroundColor: '#F8F8F8',
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? meta.color : '#E5E7EB',
-        alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      }}>
-        <Image source={{ uri: meta.logo }} style={{ width: size * 0.7, height: size * 0.7 }}
-          resizeMode="contain" onError={() => setErr(true)} />
+      <View style={{ width: size, height: size, borderRadius: size * 0.27, backgroundColor: '#F8F8F8', borderWidth: selected ? 2 : 1, borderColor: selected ? meta.color : '#E5E7EB', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <Image source={{ uri: meta.logo }} style={{ width: size * 0.7, height: size * 0.7 }} resizeMode="contain" onError={() => setErr(true)} />
       </View>
     );
   }
   return (
-    <View style={{
-      width: size, height: size, borderRadius: size * 0.27,
-      backgroundColor: selected ? meta.color : meta.color + '20',
-      alignItems: 'center', justifyContent: 'center',
-    }}>
-      <Text style={{ color: selected ? meta.textColor : meta.color, fontSize: abbrev.length > 3 ? 9 : 11, fontFamily: FONTS.extrabold, letterSpacing: 0.5 }}>
-        {abbrev}
-      </Text>
+    <View style={{ width: size, height: size, borderRadius: size * 0.27, backgroundColor: selected ? meta.color : meta.color + '20', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: selected ? meta.textColor : meta.color, fontSize: abbrev.length > 3 ? 9 : 11, fontFamily: FONTS.extrabold, letterSpacing: 0.5 }}>{abbrev}</Text>
     </View>
   );
 }
 
+// ── PIN entry modal ───────────────────────────────────────────────────────────
+function PinModal({ visible, onClose, onSuccess, accentColor }) {
+  const { colors } = useTheme();
+  const [pin,      setPin]      = useState('');
+  const [error,    setError]    = useState('');
+  const [checking, setChecking] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (visible) { setPin(''); setError(''); setTimeout(() => inputRef.current?.focus(), 200); }
+  }, [visible]);
+
+  async function submit(value) {
+    if (value.length < 4 || checking) return;
+    setChecking(true);
+    setError('');
+    try {
+      await verifyPin(value);
+      onSuccess();
+    } catch {
+      feedbackError();
+      setError('Wrong PIN. Try again.');
+      setPin('');
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function handleChange(v) {
+    const clean = v.replace(/\D/g, '').slice(0, 4);
+    setPin(clean);
+    setError('');
+    if (clean.length === 4) submit(clean);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={{ flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' }} activeOpacity={1} onPress={onClose}>
+        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, paddingBottom: 44, alignItems: 'center' }}>
+          <View style={{ width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, marginBottom: 22 }} />
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: accentColor + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+            <MaterialCommunityIcons name="lock-outline" size={26} color={accentColor} />
+          </View>
+          <Text style={{ color: colors.text, fontSize: 18, fontFamily: FONTS.bold, marginBottom: 6 }}>Enter your PIN</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: 28 }}>Confirm this transaction with your 4-digit PIN</Text>
+
+          {/* PIN dots */}
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={{
+                width: 18, height: 18, borderRadius: 9,
+                backgroundColor: pin.length > i ? accentColor : 'transparent',
+                borderWidth: 2, borderColor: pin.length > i ? accentColor : colors.border,
+              }} />
+            ))}
+          </View>
+
+          {/* Hidden text input captures keypresses */}
+          <TextInput
+            ref={inputRef}
+            value={pin}
+            onChangeText={handleChange}
+            keyboardType="number-pad"
+            maxLength={4}
+            secureTextEntry
+            style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
+          />
+
+          {/* Tap-to-focus trigger */}
+          <TouchableOpacity onPress={() => inputRef.current?.focus()} style={{ marginTop: 16, paddingVertical: 8, paddingHorizontal: 20 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: FONTS.regular }}>Tap here if keyboard doesn't appear</Text>
+          </TouchableOpacity>
+
+          {error ? <Text style={{ color: '#EF4444', fontSize: 13, fontFamily: FONTS.medium, marginTop: 8 }}>{error}</Text> : null}
+          {checking ? <ActivityIndicator color={accentColor} style={{ marginTop: 12 }} /> : null}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
 export default function UtilityScreen({ navigation, route }) {
   const { colors } = useTheme();
   const type = route?.params?.type || 'Airtime';
@@ -273,6 +331,7 @@ export default function UtilityScreen({ navigation, route }) {
   const isTV      = type === 'TV';
   const isElec    = type === 'Electricity';
 
+  // Form state
   const [phoneNumber,  setPhoneNumber]  = useState('');
   const [smartCard,    setSmartCard]    = useState('');
   const [meterNumber,  setMeterNumber]  = useState('');
@@ -282,67 +341,62 @@ export default function UtilityScreen({ navigation, route }) {
   const [amountChip,   setAmountChip]   = useState('');
   const [customAmt,    setCustomAmt]    = useState('');
   const [meterType,    setMeterType]    = useState('Prepaid');
-  const [loading,      setLoading]      = useState(false);
-  const [confirm,      setConfirm]      = useState(false);
-  const [result,       setResult]       = useState(null);
-  // Dynamic plans fetched from ClubKonnect (null = not yet fetched, {} = fetched)
+
+  // CK dynamic plans (replaces hardcoded when available)
   const [ckPlans,      setCkPlans]      = useState(null);
-  const [fetchingPlans,setFetchingPlans]= useState(false);
   const fetchedFor = useRef('');
 
-  // Fetch real plan codes from ClubKonnect when network is selected in Data mode
+  // UI state
+  const [loading,      setLoading]      = useState(false);
+  const [confirm,      setConfirm]      = useState(false);
+  const [pinVisible,   setPinVisible]   = useState(false);
+  const [result,       setResult]       = useState(null);
+
+  // Background-fetch real CK plans when network is selected in Data mode
   useEffect(() => {
     if (!isData || !selectedNet || fetchedFor.current === selectedNet) return;
     fetchedFor.current = selectedNet;
-    setFetchingPlans(true);
     setCkPlans(null);
     getDataPlans(selectedNet)
       .then(res => {
-        const plans = res.data;
-        if (Array.isArray(plans) && plans.length > 0) {
-          setCkPlans(buildDynamicTabs(plans));
-        } else {
-          setCkPlans({}); // empty means CK gave no plans — fall back to hardcoded
-        }
+        const plans = Array.isArray(res.data) && res.data.length > 0 ? res.data : null;
+        setCkPlans(plans ? buildDynamicTabs(plans) : {});
       })
-      .catch(() => setCkPlans({}))
-      .finally(() => setFetchingPlans(false));
+      .catch(() => setCkPlans({}));
   }, [isData, selectedNet]);
 
-  // Use live CK plans if available, otherwise fall back to hardcoded
+  // Prefer live CK plans; fall back to hardcoded immediately
   const planSource = useMemo(() => {
-    if (!isData || !selectedNet) return DATA_PLANS[selectedNet] || {};
-    if (ckPlans && Object.keys(ckPlans).some(k => ckPlans[k]?.length > 0)) return ckPlans;
+    if (!isData || !selectedNet) return {};
+    if (ckPlans && Object.keys(ckPlans).some(k => (ckPlans[k]?.length ?? 0) > 0)) return ckPlans;
     return DATA_PLANS[selectedNet] || {};
   }, [isData, selectedNet, ckPlans]);
 
-  // Available category tabs for the selected network
-  const availableTabs = useMemo(() => {
-    if (!isData || !selectedNet) return [];
-    return TAB_ORDER.filter(t => planSource[t] && planSource[t].length > 0);
-  }, [isData, selectedNet, planSource]);
+  const availableTabs = useMemo(() =>
+    TAB_ORDER.filter(t => planSource[t]?.length > 0),
+    [planSource],
+  );
 
-  // Plans for current tab
   const activePlans = useMemo(() => {
-    if (isData)  return planSource[planTab] || [];
-    if (isTV)    return TV_PLANS[selectedNet] || [];
+    if (isData) return planSource[planTab] || [];
+    if (isTV)   return TV_PLANS[selectedNet] || [];
     return [];
   }, [isData, isTV, selectedNet, planTab, planSource]);
 
   const selectedPlan = activePlans.find(p => p.code === selectedCode) || null;
 
   const payAmount = useMemo(() => {
-    if (isData || isTV) return selectedPlan ? selectedPlan.price : 0;
+    if (isData || isTV) return selectedPlan?.price ?? 0;
     return parseFloat(amountChip || customAmt || '0');
   }, [isData, isTV, selectedPlan, amountChip, customAmt]);
 
   const canPay = useMemo(() => {
     if (!selectedNet) return false;
-    const phone = phoneNumber.trim();
-    if (isAirtime) return phone.length >= 10 && payAmount >= 50;
-    if (isData)    return phone.length >= 10 && !!selectedCode;
-    if (isTV)      return smartCard.trim().length >= 6 && phone.length >= 10 && !!selectedCode;
-    if (isElec)    return meterNumber.trim().length >= 5 && phone.length >= 10 && payAmount >= 500;
+    const ph = phoneNumber.trim();
+    if (isAirtime) return ph.length >= 10 && payAmount >= 50;
+    if (isData)    return ph.length >= 10 && !!selectedCode;
+    if (isTV)      return smartCard.trim().length >= 6 && ph.length >= 10 && !!selectedCode;
+    if (isElec)    return meterNumber.trim().length >= 5 && ph.length >= 10 && payAmount >= 500;
     return false;
   }, [selectedNet, phoneNumber, smartCard, meterNumber, selectedCode, payAmount, isAirtime, isData, isTV, isElec]);
 
@@ -354,62 +408,41 @@ export default function UtilityScreen({ navigation, route }) {
     if (isData) { setCkPlans(null); fetchedFor.current = ''; }
   }
 
-  function selectTab(t) {
-    feedbackSelect();
-    setPlanTab(t);
-    setSelectedCode('');
-  }
+  function selectTab(t) { feedbackSelect(); setPlanTab(t); setSelectedCode(''); }
 
-  const networkList = isData || isAirtime
-    ? ['MTN', 'Airtel', 'Glo', '9mobile']
-    : isTV
-      ? ['DSTV', 'GOtv', 'Startimes', 'ShowMax']
-      : ELEC_DISCOS;
-
-  const amountChips = isAirtime ? AIRTIME_CHIPS : ELEC_CHIPS;
-  const payLabel    = payAmount > 0 ? `Pay ₦${payAmount.toLocaleString('en-NG')}` : 'Pay Now';
+  const networkList = isData || isAirtime ? ['MTN', 'Airtel', 'Glo', '9mobile']
+    : isTV ? ['DSTV', 'GOtv', 'Startimes', 'ShowMax']
+    : ELEC_DISCOS;
 
   const confirmRows = useMemo(() => {
     const rows = [];
-    if (selectedNet) rows.push({ label: isData || isAirtime ? 'Network' : isTV ? 'Provider' : 'DISCO', value: selectedNet });
+    if (selectedNet) rows.push({ label: isAirtime || isData ? 'Network' : isTV ? 'Provider' : 'DISCO', value: selectedNet });
     if (isTV)   rows.push({ label: 'Smart Card', value: smartCard });
     if (isElec) rows.push({ label: 'Meter No.', value: meterNumber }, { label: 'Type', value: meterType });
     rows.push({ label: 'Phone', value: phoneNumber });
-    if (selectedPlan) rows.push({ label: isTV ? 'Package' : 'Plan', value: `${selectedPlan.name} (${selectedPlan.duration})` });
+    if (selectedPlan) rows.push({ label: isTV ? 'Package' : 'Plan', value: `${selectedPlan.name} · ${selectedPlan.duration}` });
     rows.push({ label: 'Amount', value: `₦${payAmount.toLocaleString('en-NG')}` });
     return rows;
   }, [selectedNet, phoneNumber, smartCard, meterNumber, meterType, selectedPlan, payAmount, isAirtime, isData, isTV, isElec]);
 
   async function handlePay() {
     if (!canPay || loading) return;
-    setConfirm(false);
+    setPinVisible(false);
     setLoading(true);
     try {
       let res;
       if (isAirtime) {
         res = await buyAirtime({ network: selectedNet, phone: phoneNumber, amount: payAmount.toString() });
       } else if (isData) {
-        res = await buyData({
-          network: selectedNet, phone: phoneNumber,
-          planCode: selectedPlan.code, planName: `${selectedPlan.name} ${selectedPlan.duration}`,
-          amount: selectedPlan.price.toString(),
-        });
+        res = await buyData({ network: selectedNet, phone: phoneNumber, planCode: selectedPlan.code, planName: `${selectedPlan.name} ${selectedPlan.duration}`, amount: selectedPlan.price.toString() });
       } else if (isTV) {
-        res = await buyTV({
-          provider: selectedNet, packageCode: selectedPlan.code,
-          packageName: selectedPlan.name, smartCard, phone: phoneNumber,
-          amount: selectedPlan.price.toString(),
-        });
+        res = await buyTV({ provider: selectedNet, packageCode: selectedPlan.code, packageName: selectedPlan.name, smartCard, phone: phoneNumber, amount: selectedPlan.price.toString() });
       } else if (isElec) {
-        res = await buyElectricity({
-          disco: selectedNet, meterNo: meterNumber,
-          meterType, phone: phoneNumber, amount: payAmount.toString(),
-        });
+        res = await buyElectricity({ disco: selectedNet, meterNo: meterNumber, meterType, phone: phoneNumber, amount: payAmount.toString() });
       }
       setResult({ success: true, message: res.data.message, token: res.data.token });
     } catch (err) {
-      const msg = err?.response?.data?.error || 'Payment failed. Please try again.';
-      setResult({ success: false, message: msg });
+      setResult({ success: false, message: err?.response?.data?.error || 'Payment failed. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -439,11 +472,9 @@ export default function UtilityScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Network / Provider / DISCO selector */}
+        {/* Network / Provider / DISCO */}
         <View style={S.section}>
-          <Text style={S.sectionLabel}>
-            {isData || isAirtime ? 'SELECT NETWORK' : isTV ? 'SELECT PROVIDER' : 'SELECT ELECTRICITY COMPANY'}
-          </Text>
+          <Text style={S.sectionLabel}>{isData || isAirtime ? 'SELECT NETWORK' : isTV ? 'SELECT PROVIDER' : 'SELECT ELECTRICITY COMPANY'}</Text>
           <View style={[S.networkGrid, isElec && S.discoGrid]}>
             {networkList.map(n => {
               const sel  = selectedNet === n;
@@ -455,11 +486,7 @@ export default function UtilityScreen({ navigation, route }) {
                 >
                   <NetworkLogo name={n} size={isElec ? 34 : 40} selected={sel} />
                   <Text style={[S.networkName, sel && { color: meta.color, fontFamily: FONTS.bold }]} numberOfLines={1}>{n}</Text>
-                  {sel && (
-                    <View style={[S.netCheck, { backgroundColor: meta.color }]}>
-                      <Ionicons name="checkmark" size={9} color="#fff" />
-                    </View>
-                  )}
+                  {sel && <View style={[S.netCheck, { backgroundColor: meta.color }]}><Ionicons name="checkmark" size={9} color="#fff" /></View>}
                 </TouchableOpacity>
               );
             })}
@@ -471,9 +498,7 @@ export default function UtilityScreen({ navigation, route }) {
           <View style={S.section}>
             <Text style={S.sectionLabel}>SMART CARD / IUC NUMBER</Text>
             <View style={S.inputWrap}>
-              <TextInput style={S.input} placeholder="Enter your smart card number"
-                placeholderTextColor={colors.textMuted} keyboardType="number-pad"
-                value={smartCard} onChangeText={setSmartCard} maxLength={12} />
+              <TextInput style={S.input} placeholder="Enter your smart card number" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={smartCard} onChangeText={setSmartCard} maxLength={12} />
             </View>
           </View>
         )}
@@ -483,9 +508,7 @@ export default function UtilityScreen({ navigation, route }) {
           <View style={S.section}>
             <Text style={S.sectionLabel}>METER NUMBER</Text>
             <View style={S.inputWrap}>
-              <TextInput style={S.input} placeholder="Enter your meter number"
-                placeholderTextColor={colors.textMuted} keyboardType="number-pad"
-                value={meterNumber} onChangeText={setMeterNumber} maxLength={13} />
+              <TextInput style={S.input} placeholder="Enter your meter number" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={meterNumber} onChangeText={setMeterNumber} maxLength={13} />
             </View>
           </View>
         )}
@@ -494,9 +517,7 @@ export default function UtilityScreen({ navigation, route }) {
         <View style={S.section}>
           <Text style={S.sectionLabel}>{isTV ? 'PHONE NUMBER (NOTIFICATION)' : 'PHONE NUMBER'}</Text>
           <View style={S.inputWrap}>
-            <TextInput style={S.input} placeholder="080XXXXXXXX"
-              placeholderTextColor={colors.textMuted} keyboardType="phone-pad"
-              value={phoneNumber} onChangeText={setPhoneNumber} maxLength={14} />
+            <TextInput style={S.input} placeholder="080XXXXXXXX" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} maxLength={14} />
           </View>
         </View>
 
@@ -517,54 +538,77 @@ export default function UtilityScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Data: fetching spinner */}
-        {isData && selectedNet && fetchingPlans && (
-          <View style={{ alignItems: 'center', paddingVertical: 30, gap: 10 }}>
-            <ActivityIndicator color={cfg.color} />
-            <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: FONTS.regular }}>
-              Loading {selectedNet} plans…
-            </Text>
+        {/* Data plan section */}
+        {isData && (
+          <View style={S.section}>
+            {!selectedNet ? (
+              <View style={S.emptyNetPrompt}>
+                <MaterialCommunityIcons name="wifi-off" size={32} color={colors.textMuted} />
+                <Text style={[S.emptyNetTxt, { color: colors.textMuted }]}>Select a network above to see plans</Text>
+              </View>
+            ) : (
+              <>
+                {/* Category tabs */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.tabRow} style={{ marginBottom: 4 }}>
+                  {availableTabs.map(t => {
+                    const active = planTab === t;
+                    return (
+                      <TouchableOpacity key={t} style={[S.tab, active && { backgroundColor: cfg.color, borderColor: cfg.color }]} onPress={() => selectTab(t)} activeOpacity={0.75}>
+                        <MaterialCommunityIcons name={TAB_ICONS[t]} size={13} color={active ? '#fff' : colors.textMuted} style={{ marginRight: 4 }} />
+                        <Text style={[S.tabTxt, active && { color: '#fff', fontFamily: FONTS.bold }]}>{TAB_LABELS[t]}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Night banner */}
+                {planTab === 'night' && (
+                  <View style={[S.nightBanner, { backgroundColor: '#1E1B4B' }]}>
+                    <MaterialCommunityIcons name="weather-night" size={15} color="#A78BFA" />
+                    <Text style={S.nightTxt}>Valid midnight – 5am only. Data resets each day.</Text>
+                  </View>
+                )}
+
+                <Text style={[S.sectionLabel, { marginTop: 14 }]}>{selectedNet} {(TAB_LABELS[planTab] || '').toUpperCase()} PLANS</Text>
+
+                {activePlans.length > 0 ? (
+                  <View style={S.planList}>
+                    {activePlans.map(p => {
+                      const sel = selectedCode === p.code;
+                      return (
+                        <TouchableOpacity key={p.code}
+                          style={[S.planRow, sel && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]}
+                          onPress={() => { feedbackSelect(); setSelectedCode(p.code); }} activeOpacity={0.7}
+                        >
+                          <View style={S.planLeft}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={[S.planName, sel && { color: cfg.color }]}>{p.name}</Text>
+                              {p.tag ? <View style={[S.planTag, { backgroundColor: sel ? cfg.color : cfg.color + '20' }]}><Text style={[S.planTagTxt, { color: sel ? '#fff' : cfg.color }]}>{p.tag}</Text></View> : null}
+                            </View>
+                            <Text style={S.planDuration}>{p.duration}</Text>
+                          </View>
+                          <View style={S.planRight}>
+                            <Text style={[S.planPrice, sel && { color: cfg.color }]}>₦{p.price.toLocaleString('en-NG')}</Text>
+                            <View style={[S.planRadio, sel ? { backgroundColor: cfg.color, borderColor: cfg.color } : { borderColor: colors.border }]}>
+                              {sel && <View style={S.planDot} />}
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={[S.emptyNetTxt, { color: colors.textMuted, marginTop: 12 }]}>No plans available for this tab</Text>
+                )}
+              </>
+            )}
           </View>
         )}
 
-        {/* Data plan tabs + list */}
-        {isData && selectedNet && !fetchingPlans && (
+        {/* TV plan list */}
+        {isTV && selectedNet && activePlans.length > 0 && (
           <View style={S.section}>
-            {/* Category tabs */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.tabScroll} contentContainerStyle={S.tabRow}>
-              {availableTabs.map(t => {
-                const active = planTab === t;
-                return (
-                  <TouchableOpacity key={t}
-                    style={[S.tab, active && { backgroundColor: cfg.color }]}
-                    onPress={() => selectTab(t)} activeOpacity={0.75}
-                  >
-                    <MaterialCommunityIcons
-                      name={TAB_ICONS[t]}
-                      size={13}
-                      color={active ? '#fff' : colors.textMuted}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={[S.tabTxt, active && { color: '#fff', fontFamily: FONTS.bold }]}>
-                      {TAB_LABELS[t]}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Night plan banner */}
-            {planTab === 'night' && (
-              <View style={[S.nightBanner, { backgroundColor: '#1E1B4B' }]}>
-                <MaterialCommunityIcons name="weather-night" size={16} color="#A78BFA" />
-                <Text style={S.nightBannerTxt}>Valid midnight – 5am only. Data resets daily.</Text>
-              </View>
-            )}
-
-            {/* Plan list */}
-            <Text style={[S.sectionLabel, { marginTop: 14 }]}>
-              {selectedNet.toUpperCase()} {TAB_LABELS[planTab].toUpperCase()} PLANS
-            </Text>
+            <Text style={S.sectionLabel}>{selectedNet} PACKAGES</Text>
             <View style={S.planList}>
               {activePlans.map(p => {
                 const sel = selectedCode === p.code;
@@ -574,23 +618,12 @@ export default function UtilityScreen({ navigation, route }) {
                     onPress={() => { feedbackSelect(); setSelectedCode(p.code); }} activeOpacity={0.7}
                   >
                     <View style={S.planLeft}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[S.planName, sel && { color: cfg.color }]}>{p.name}</Text>
-                        {p.tag ? (
-                          <View style={[S.planTag, { backgroundColor: sel ? cfg.color : cfg.color + '20' }]}>
-                            <Text style={[S.planTagTxt, { color: sel ? '#fff' : cfg.color }]}>{p.tag}</Text>
-                          </View>
-                        ) : null}
-                      </View>
+                      <Text style={[S.planName, sel && { color: cfg.color }]}>{p.name}</Text>
                       <Text style={S.planDuration}>{p.duration}</Text>
                     </View>
                     <View style={S.planRight}>
-                      <Text style={[S.planPrice, sel && { color: cfg.color }]}>
-                        ₦{p.price.toLocaleString('en-NG')}
-                      </Text>
-                      <View style={[S.planRadio, sel
-                        ? { backgroundColor: cfg.color, borderColor: cfg.color }
-                        : { borderColor: colors.border }]}>
+                      <Text style={[S.planPrice, sel && { color: cfg.color }]}>₦{p.price.toLocaleString('en-NG')}</Text>
+                      <View style={[S.planRadio, sel ? { backgroundColor: cfg.color, borderColor: cfg.color } : { borderColor: colors.border }]}>
                         {sel && <View style={S.planDot} />}
                       </View>
                     </View>
@@ -601,68 +634,25 @@ export default function UtilityScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TV plan list */}
-        {isTV && selectedNet && (
-          <View style={S.section}>
-            <Text style={S.sectionLabel}>{selectedNet.toUpperCase()} PACKAGES</Text>
-            {activePlans.length > 0 ? (
-              <View style={S.planList}>
-                {activePlans.map(p => {
-                  const sel = selectedCode === p.code;
-                  return (
-                    <TouchableOpacity key={p.code}
-                      style={[S.planRow, sel && { borderColor: cfg.color, backgroundColor: cfg.color + '08' }]}
-                      onPress={() => { feedbackSelect(); setSelectedCode(p.code); }} activeOpacity={0.7}
-                    >
-                      <View style={S.planLeft}>
-                        <Text style={[S.planName, sel && { color: cfg.color }]}>{p.name}</Text>
-                        <Text style={S.planDuration}>{p.duration}</Text>
-                      </View>
-                      <View style={S.planRight}>
-                        <Text style={[S.planPrice, sel && { color: cfg.color }]}>₦{p.price.toLocaleString('en-NG')}</Text>
-                        <View style={[S.planRadio, sel ? { backgroundColor: cfg.color, borderColor: cfg.color } : { borderColor: colors.border }]}>
-                          {sel && <View style={S.planDot} />}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
-        )}
-
-        {/* Data prompt (no network selected yet) */}
-        {isData && !selectedNet && !fetchingPlans && (
-          <View style={[S.section, { alignItems: 'center', paddingVertical: 20 }]}>
-            <MaterialCommunityIcons name="wifi-off" size={36} color={colors.textMuted} />
-            <Text style={[S.emptyPlans, { color: colors.textMuted, marginTop: 10 }]}>Select a network to see plans</Text>
-          </View>
-        )}
-
         {/* Amount chips (Airtime / Electricity) */}
         {(isAirtime || isElec) && (
           <View style={S.section}>
             <Text style={S.sectionLabel}>AMOUNT (₦)</Text>
             <View style={S.chipRow}>
-              {amountChips.map(a => {
+              {(isAirtime ? AIRTIME_CHIPS : ELEC_CHIPS).map(a => {
                 const sel = amountChip === a;
                 return (
                   <TouchableOpacity key={a}
                     style={[S.chip, sel && { borderColor: cfg.color, backgroundColor: cfg.color + '12' }]}
                     onPress={() => { feedbackSelect(); setAmountChip(a); setCustomAmt(''); }} activeOpacity={0.7}
                   >
-                    <Text style={[S.chipTxt, sel && { color: cfg.color, fontFamily: FONTS.bold }]}>
-                      ₦{parseInt(a).toLocaleString()}
-                    </Text>
+                    <Text style={[S.chipTxt, sel && { color: cfg.color, fontFamily: FONTS.bold }]}>₦{parseInt(a).toLocaleString()}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
             <View style={[S.inputWrap, { marginTop: 12 }]}>
-              <TextInput style={S.input} placeholder="Or enter a custom amount"
-                placeholderTextColor={colors.textMuted} keyboardType="number-pad"
-                value={customAmt} onChangeText={v => { setCustomAmt(v); setAmountChip(''); }} />
+              <TextInput style={S.input} placeholder="Or enter a custom amount" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={customAmt} onChangeText={v => { setCustomAmt(v); setAmountChip(''); }} />
             </View>
           </View>
         )}
@@ -674,10 +664,9 @@ export default function UtilityScreen({ navigation, route }) {
           disabled={!canPay || loading}
           onPress={() => { feedbackMedium(); setConfirm(true); }}
         >
-          <Text style={S.payBtnTxt}>{payLabel}</Text>
+          <Text style={S.payBtnTxt}>{payAmount > 0 ? `Pay ₦${payAmount.toLocaleString('en-NG')}` : 'Pay Now'}</Text>
           <Ionicons name="arrow-forward" size={18} color="#fff" />
         </TouchableOpacity>
-
         <View style={{ height: 24 }} />
       </ScrollView>
 
@@ -703,7 +692,8 @@ export default function UtilityScreen({ navigation, route }) {
                 <Text style={[S.confirmValue, { color: colors.text }]}>{value}</Text>
               </View>
             ))}
-            <TouchableOpacity style={[S.confirmBtn, { backgroundColor: cfg.color }]} onPress={handlePay} activeOpacity={0.82}>
+            <TouchableOpacity style={[S.confirmBtn, { backgroundColor: cfg.color }]}
+              onPress={() => { setConfirm(false); setPinVisible(true); }} activeOpacity={0.82}>
               <Text style={S.confirmBtnTxt}>Confirm & Pay</Text>
             </TouchableOpacity>
             <TouchableOpacity style={S.cancelBtn} onPress={() => setConfirm(false)} activeOpacity={0.7}>
@@ -712,6 +702,14 @@ export default function UtilityScreen({ navigation, route }) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* PIN modal */}
+      <PinModal
+        visible={pinVisible}
+        onClose={() => setPinVisible(false)}
+        onSuccess={handlePay}
+        accentColor={cfg.color}
+      />
 
       {/* Result modal */}
       <Modal visible={!!result} transparent animationType="fade" onRequestClose={() => setResult(null)}>
@@ -758,13 +756,13 @@ export default function UtilityScreen({ navigation, route }) {
 
 function makeStyles(C) {
   return StyleSheet.create({
-    root:   { flex: 1, backgroundColor: C.bg },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-    backBtn:{ width: 38, height: 38, borderRadius: 12, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+    root:        { flex: 1, backgroundColor: C.bg },
+    header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+    backBtn:     { width: 38, height: 38, borderRadius: 12, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
     headerTitle: { color: C.text, fontSize: 17, fontFamily: FONTS.bold },
-    scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+    scroll:      { paddingHorizontal: 20, paddingBottom: 40 },
 
-    hero: { flexDirection: 'row', alignItems: 'center', gap: 14, borderLeftWidth: 3, paddingLeft: 14, marginBottom: 26, marginTop: 4 },
+    hero:      { flexDirection: 'row', alignItems: 'center', gap: 14, borderLeftWidth: 3, paddingLeft: 14, marginBottom: 26, marginTop: 4 },
     heroIcon:  { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     heroLabel: { color: C.text, fontSize: 16, fontFamily: FONTS.bold },
     heroSub:   { color: C.textSecondary, fontSize: 12, fontFamily: FONTS.regular, marginTop: 2, lineHeight: 18 },
@@ -786,22 +784,18 @@ function makeStyles(C) {
     meterTypeBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, alignItems: 'center' },
     meterTypeTxt: { color: C.text, fontSize: 14, fontFamily: FONTS.semibold },
 
-    // Plan tabs
-    tabScroll: { marginBottom: 0 },
-    tabRow:    { flexDirection: 'row', gap: 8, paddingRight: 4 },
-    tab: {
-      flexDirection: 'row', alignItems: 'center',
-      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-    },
-    tabTxt: { color: C.textMuted, fontSize: 13, fontFamily: FONTS.semibold },
+    emptyNetPrompt: { alignItems: 'center', paddingVertical: 24, gap: 10 },
+    emptyNetTxt:    { fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center' },
 
-    // Night banner
+    tabRow:     { flexDirection: 'row', gap: 8, paddingRight: 4, paddingBottom: 2 },
+    tab:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+    tabTxt:     { color: C.textMuted, fontSize: 13, fontFamily: FONTS.semibold },
+
     nightBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, padding: 10, marginTop: 10 },
-    nightBannerTxt: { color: '#A78BFA', fontSize: 12, fontFamily: FONTS.regular, flex: 1 },
+    nightTxt:    { color: '#A78BFA', fontSize: 12, fontFamily: FONTS.regular, flex: 1 },
 
     planList:     { gap: 8 },
-    planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 14, paddingVertical: 13 },
+    planRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 14, paddingVertical: 13 },
     planLeft:     { flex: 1 },
     planName:     { color: C.text, fontSize: 14, fontFamily: FONTS.semibold },
     planDuration: { color: C.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginTop: 2 },
@@ -811,7 +805,6 @@ function makeStyles(C) {
     planPrice:    { color: C.text, fontSize: 14, fontFamily: FONTS.bold },
     planRadio:    { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     planDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
-    emptyPlans:   { fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center' },
 
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip:    { borderRadius: 12, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 11 },
@@ -824,17 +817,17 @@ function makeStyles(C) {
     loadingCard:    { borderRadius: 18, padding: 28, alignItems: 'center', gap: 14, minWidth: 160 },
     loadingTxt:     { fontSize: 14, fontFamily: FONTS.medium },
 
-    overlay:      { flex: 1, backgroundColor: '#00000055', justifyContent: 'flex-end' },
-    sheet:        { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 },
-    sheetHandle:  { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-    sheetTitle:   { fontSize: 18, fontFamily: FONTS.bold, marginBottom: 20 },
-    confirmRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1 },
-    confirmLabel: { fontSize: 13, fontFamily: FONTS.regular },
-    confirmValue: { fontSize: 13, fontFamily: FONTS.semibold, maxWidth: '60%', textAlign: 'right' },
-    confirmBtn:   { height: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
-    confirmBtnTxt:{ color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
-    cancelBtn:    { alignItems: 'center', paddingVertical: 14 },
-    cancelTxt:    { fontSize: 14, fontFamily: FONTS.medium },
+    overlay:       { flex: 1, backgroundColor: '#00000055', justifyContent: 'flex-end' },
+    sheet:         { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 },
+    sheetHandle:   { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+    sheetTitle:    { fontSize: 18, fontFamily: FONTS.bold, marginBottom: 20 },
+    confirmRow:    { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1 },
+    confirmLabel:  { fontSize: 13, fontFamily: FONTS.regular },
+    confirmValue:  { fontSize: 13, fontFamily: FONTS.semibold, maxWidth: '60%', textAlign: 'right' },
+    confirmBtn:    { height: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+    confirmBtnTxt: { color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
+    cancelBtn:     { alignItems: 'center', paddingVertical: 14 },
+    cancelTxt:     { fontSize: 14, fontFamily: FONTS.medium },
 
     resultOverlay: { flex: 1, backgroundColor: '#00000088', justifyContent: 'center', alignItems: 'center', padding: 24 },
     resultCard:    { width: '100%', borderRadius: 24, padding: 28, alignItems: 'center' },
