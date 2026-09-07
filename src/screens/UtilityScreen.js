@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  Image, ActivityIndicator, Modal,
+  Image, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
-import { feedbackMedium, feedbackSelect, feedbackError } from '../utils/feedback';
+import { feedbackMedium, feedbackSelect } from '../utils/feedback';
 import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans, verifyPin } from '../services/api';
+import { registerPinCallback } from './PinEntryScreen';
 
 const BRAND = '#7C3AED';
 const _fav  = d => `https://www.google.com/s2/favicons?domain=${d}&sz=128`;
@@ -238,87 +239,6 @@ function NetworkLogo({ name, size = 44, selected }) {
   );
 }
 
-// ── PIN entry modal ───────────────────────────────────────────────────────────
-function PinModal({ visible, onClose, onSuccess, accentColor }) {
-  const { colors } = useTheme();
-  const [pin,      setPin]      = useState('');
-  const [error,    setError]    = useState('');
-  const [checking, setChecking] = useState(false);
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (visible) { setPin(''); setError(''); setTimeout(() => inputRef.current?.focus(), 200); }
-  }, [visible]);
-
-  async function submit(value) {
-    if (value.length < 4 || checking) return;
-    setChecking(true);
-    setError('');
-    try {
-      await verifyPin(value);
-      onSuccess();
-    } catch {
-      feedbackError();
-      setError('Wrong PIN. Try again.');
-      setPin('');
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  function handleChange(v) {
-    const clean = v.replace(/\D/g, '').slice(0, 4);
-    setPin(clean);
-    setError('');
-    if (clean.length === 4) submit(clean);
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={{ flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' }} activeOpacity={1} onPress={onClose}>
-        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, paddingBottom: 44, alignItems: 'center' }}>
-          <View style={{ width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, marginBottom: 22 }} />
-          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: accentColor + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-            <MaterialCommunityIcons name="lock-outline" size={26} color={accentColor} />
-          </View>
-          <Text style={{ color: colors.text, fontSize: 18, fontFamily: FONTS.bold, marginBottom: 6 }}>Enter your PIN</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: 28 }}>Confirm this transaction with your 4-digit PIN</Text>
-
-          {/* PIN dots */}
-          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
-            {[0, 1, 2, 3].map(i => (
-              <View key={i} style={{
-                width: 18, height: 18, borderRadius: 9,
-                backgroundColor: pin.length > i ? accentColor : 'transparent',
-                borderWidth: 2, borderColor: pin.length > i ? accentColor : colors.border,
-              }} />
-            ))}
-          </View>
-
-          {/* Hidden text input captures keypresses */}
-          <TextInput
-            ref={inputRef}
-            value={pin}
-            onChangeText={handleChange}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry
-            style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
-          />
-
-          {/* Tap-to-focus trigger */}
-          <TouchableOpacity onPress={() => inputRef.current?.focus()} style={{ marginTop: 16, paddingVertical: 8, paddingHorizontal: 20 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: FONTS.regular }}>Tap here if keyboard doesn't appear</Text>
-          </TouchableOpacity>
-
-          {error ? <Text style={{ color: '#EF4444', fontSize: 13, fontFamily: FONTS.medium, marginTop: 8 }}>{error}</Text> : null}
-          {checking ? <ActivityIndicator color={accentColor} style={{ marginTop: 12 }} /> : null}
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function UtilityScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -347,10 +267,7 @@ export default function UtilityScreen({ navigation, route }) {
   const fetchedFor = useRef('');
 
   // UI state
-  const [loading,      setLoading]      = useState(false);
-  const [confirm,      setConfirm]      = useState(false);
-  const [pinVisible,   setPinVisible]   = useState(false);
-  const [result,       setResult]       = useState(null);
+  const [confirm, setConfirm] = useState(false);
 
   // Background-fetch real CK plans when network is selected in Data mode
   useEffect(() => {
@@ -425,27 +342,64 @@ export default function UtilityScreen({ navigation, route }) {
     return rows;
   }, [selectedNet, phoneNumber, smartCard, meterNumber, meterType, selectedPlan, payAmount, isAirtime, isData, isTV, isElec]);
 
-  async function handlePay() {
-    if (!canPay || loading) return;
-    setPinVisible(false);
-    setLoading(true);
-    try {
-      let res;
-      if (isAirtime) {
-        res = await buyAirtime({ network: selectedNet, phone: phoneNumber, amount: payAmount.toString() });
-      } else if (isData) {
-        res = await buyData({ network: selectedNet, phone: phoneNumber, planCode: selectedPlan.code, planName: `${selectedPlan.name} ${selectedPlan.duration}`, amount: selectedPlan.price.toString() });
-      } else if (isTV) {
-        res = await buyTV({ provider: selectedNet, packageCode: selectedPlan.code, packageName: selectedPlan.name, smartCard, phone: phoneNumber, amount: selectedPlan.price.toString() });
-      } else if (isElec) {
-        res = await buyElectricity({ disco: selectedNet, meterNo: meterNumber, meterType, phone: phoneNumber, amount: payAmount.toString() });
+  function handleConfirmAndPay() {
+    setConfirm(false);
+
+    // Capture current state into closure before navigating away
+    const snap = {
+      isAirtime, isData, isTV, isElec,
+      selectedNet, phoneNumber, smartCard, meterNumber, meterType,
+      payAmount, selectedPlan, type,
+    };
+
+    registerPinCallback('utility', async (pin, { onError, goBack }) => {
+      try {
+        await verifyPin(pin);
+      } catch {
+        onError('Wrong PIN. Try again.');
+        return;
       }
-      setResult({ success: true, message: res.data.message, token: res.data.token });
-    } catch (err) {
-      setResult({ success: false, message: err?.response?.data?.error || 'Payment failed. Please try again.' });
-    } finally {
-      setLoading(false);
-    }
+      try {
+        let res;
+        if (snap.isAirtime) {
+          res = await buyAirtime({ network: snap.selectedNet, phone: snap.phoneNumber, amount: snap.payAmount.toString() });
+        } else if (snap.isData) {
+          res = await buyData({ network: snap.selectedNet, phone: snap.phoneNumber, planCode: snap.selectedPlan.code, planName: `${snap.selectedPlan.name} ${snap.selectedPlan.duration}`, amount: snap.selectedPlan.price.toString() });
+        } else if (snap.isTV) {
+          res = await buyTV({ provider: snap.selectedNet, packageCode: snap.selectedPlan.code, packageName: snap.selectedPlan.name, smartCard: snap.smartCard, phone: snap.phoneNumber, amount: snap.selectedPlan.price.toString() });
+        } else if (snap.isElec) {
+          res = await buyElectricity({ disco: snap.selectedNet, meterNo: snap.meterNumber, meterType: snap.meterType, phone: snap.phoneNumber, amount: snap.payAmount.toString() });
+        }
+        const d = res.data;
+        const receiptTx = {
+          txId:        d.orderId || `UTIL-${Date.now()}`,
+          type:        'utility',
+          status:      'completed',
+          amount:      snap.payAmount,
+          createdAt:   new Date().toISOString(),
+          narration:   d.message || '',
+          utilityType: snap.type,
+          network:     snap.selectedNet,
+          phone:       snap.phoneNumber,
+          plan:        snap.selectedPlan ? `${snap.selectedPlan.name} · ${snap.selectedPlan.duration}` : null,
+          smartCard:   snap.isTV ? snap.smartCard : null,
+          meterNo:     snap.isElec ? snap.meterNumber : null,
+          meterType:   snap.isElec ? snap.meterType : null,
+          token:       d.token || null,
+          orderId:     d.orderId || null,
+        };
+        goBack();
+        navigation.navigate('Receipt', { tx: receiptTx });
+      } catch (err) {
+        onError(err?.response?.data?.error || 'Payment failed. Please try again.');
+      }
+    });
+
+    navigation.navigate('PinEntry', {
+      title: 'Confirm Payment',
+      subtitle: `Pay ₦${payAmount.toLocaleString('en-NG')} · ${selectedNet}`,
+      callbackKey: 'utility',
+    });
   }
 
   return (
@@ -670,16 +624,6 @@ export default function UtilityScreen({ navigation, route }) {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* Loading overlay */}
-      {loading && (
-        <View style={S.loadingOverlay}>
-          <View style={[S.loadingCard, { backgroundColor: colors.card }]}>
-            <ActivityIndicator size="large" color={cfg.color} />
-            <Text style={[S.loadingTxt, { color: colors.text }]}>Processing payment…</Text>
-          </View>
-        </View>
-      )}
-
       {/* Confirm bottom sheet */}
       <Modal visible={confirm} transparent animationType="slide" onRequestClose={() => setConfirm(false)}>
         <TouchableOpacity style={S.overlay} activeOpacity={1} onPress={() => setConfirm(false)}>
@@ -693,7 +637,7 @@ export default function UtilityScreen({ navigation, route }) {
               </View>
             ))}
             <TouchableOpacity style={[S.confirmBtn, { backgroundColor: cfg.color }]}
-              onPress={() => { setConfirm(false); setPinVisible(true); }} activeOpacity={0.82}>
+              onPress={handleConfirmAndPay} activeOpacity={0.82}>
               <Text style={S.confirmBtnTxt}>Confirm & Pay</Text>
             </TouchableOpacity>
             <TouchableOpacity style={S.cancelBtn} onPress={() => setConfirm(false)} activeOpacity={0.7}>
@@ -701,53 +645,6 @@ export default function UtilityScreen({ navigation, route }) {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      {/* PIN modal */}
-      <PinModal
-        visible={pinVisible}
-        onClose={() => setPinVisible(false)}
-        onSuccess={handlePay}
-        accentColor={cfg.color}
-      />
-
-      {/* Result modal */}
-      <Modal visible={!!result} transparent animationType="fade" onRequestClose={() => setResult(null)}>
-        <View style={S.resultOverlay}>
-          <View style={[S.resultCard, { backgroundColor: colors.card }]}>
-            {result?.success ? (
-              <>
-                <View style={[S.resultIcon, { backgroundColor: '#22C55E20' }]}>
-                  <MaterialCommunityIcons name="check-circle" size={52} color="#22C55E" />
-                </View>
-                <Text style={[S.resultTitle, { color: colors.text }]}>Payment Successful!</Text>
-                <Text style={[S.resultMsg, { color: colors.textSecondary }]}>{result.message}</Text>
-                {result.token ? (
-                  <View style={[S.tokenBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                    <Text style={[S.tokenLabel, { color: colors.textMuted }]}>Electricity Token</Text>
-                    <Text style={[S.tokenValue, { color: cfg.color }]}>{result.token}</Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity style={[S.resultBtn, { backgroundColor: cfg.color }]}
-                  onPress={() => { setResult(null); navigation.goBack(); }} activeOpacity={0.82}>
-                  <Text style={S.resultBtnTxt}>Done</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={[S.resultIcon, { backgroundColor: '#EF444420' }]}>
-                  <MaterialCommunityIcons name="close-circle" size={52} color="#EF4444" />
-                </View>
-                <Text style={[S.resultTitle, { color: colors.text }]}>Payment Failed</Text>
-                <Text style={[S.resultMsg, { color: colors.textSecondary }]}>{result?.message}</Text>
-                <TouchableOpacity style={[S.resultBtn, { backgroundColor: cfg.color }]}
-                  onPress={() => setResult(null)} activeOpacity={0.82}>
-                  <Text style={S.resultBtnTxt}>Try Again</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
       </Modal>
 
     </SafeAreaView>
@@ -813,10 +710,6 @@ function makeStyles(C) {
     payBtn:    { height: 56, borderRadius: 16, marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     payBtnTxt: { color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
 
-    loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000066', alignItems: 'center', justifyContent: 'center' },
-    loadingCard:    { borderRadius: 18, padding: 28, alignItems: 'center', gap: 14, minWidth: 160 },
-    loadingTxt:     { fontSize: 14, fontFamily: FONTS.medium },
-
     overlay:       { flex: 1, backgroundColor: '#00000055', justifyContent: 'flex-end' },
     sheet:         { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 },
     sheetHandle:   { width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
@@ -829,15 +722,5 @@ function makeStyles(C) {
     cancelBtn:     { alignItems: 'center', paddingVertical: 14 },
     cancelTxt:     { fontSize: 14, fontFamily: FONTS.medium },
 
-    resultOverlay: { flex: 1, backgroundColor: '#00000088', justifyContent: 'center', alignItems: 'center', padding: 24 },
-    resultCard:    { width: '100%', borderRadius: 24, padding: 28, alignItems: 'center' },
-    resultIcon:    { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-    resultTitle:   { fontSize: 20, fontFamily: FONTS.bold, marginBottom: 8 },
-    resultMsg:     { fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
-    tokenBox:      { width: '100%', borderRadius: 12, borderWidth: 1, padding: 14, alignItems: 'center', marginBottom: 20 },
-    tokenLabel:    { fontSize: 11, fontFamily: FONTS.regular, marginBottom: 4 },
-    tokenValue:    { fontSize: 18, fontFamily: FONTS.bold, letterSpacing: 2 },
-    resultBtn:     { width: '100%', height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    resultBtnTxt:  { color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
   });
 }
