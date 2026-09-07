@@ -82,6 +82,22 @@ function buildPdfHtml({ tx, typeInfo, statusInfo, amtPrefix, amtColor, amountFor
       <span class="row-r">&#8358;${feeAmt}</span>
     </div>` : '';
 
+  const utilityRows = tx.type === 'utility' ? [
+    tx.network  && { label: tx.utilityType === 'Electricity' ? 'DISCO' : 'Network / Provider', value: tx.network },
+    tx.phone    && { label: 'Phone',                  value: tx.phone },
+    tx.smartCard && { label: 'Smart Card / IUC',      value: tx.smartCard },
+    tx.meterNo  && { label: 'Meter No.',              value: tx.meterNo },
+    tx.meterType && { label: 'Meter Type',            value: tx.meterType },
+    tx.plan     && { label: tx.utilityType === 'TV' ? 'Package' : tx.utilityType === 'Data' ? 'Data Plan' : 'Plan', value: tx.plan },
+    tx.token    && { label: 'Electricity Token',      value: tx.token },
+    tx.orderId  && { label: 'Order / Session ID',     value: tx.orderId },
+  ].filter(Boolean) : [];
+  const utilityBlock = utilityRows.map(r => `
+    <div class="row">
+      <span class="row-l">${r.label}</span>
+      <span class="row-r">${r.value}</span>
+    </div>`).join('');
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -246,6 +262,7 @@ body {
       <span class="row-r" style="color:${isIncoming ? '#10B981' : '#1E1B2E'};font-weight:800;font-size:14px">${amtPrefix}&#8358;${amountFormatted}</span>
     </div>
     ${feeRow}
+    ${utilityBlock}
     <div class="row">
       <span class="row-l">Status</span>
       <span class="row-r" style="color:${statusInfo.color};font-weight:700">${statusInfo.label}</span>
@@ -303,10 +320,15 @@ export default function ReceiptScreen({ route, navigation }) {
   const amountFormatted = (tx.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
   const getParty = () => {
-    if (tx.type === 'cera_transfer_in')  return { label: 'From', name: tx.from?.name  || 'CERA User', sub: tx.from?.ceraId || '' };
-    if (tx.type === 'cera_transfer_out') return { label: 'To',   name: tx.to?.name    || 'CERA User', sub: tx.to?.ceraId   || '' };
-    if (tx.type === 'bank_payout')       return { label: 'Bank', name: tx.bankName    || 'Bank',       sub: tx.accountNumber ? `**** ${tx.accountNumber.slice(-4)}` : '' };
-    if (tx.type === 'crypto_receive')    return { label: 'Asset', name: tx.coin || 'Crypto', sub: tx.network || '' };
+    if (tx.type === 'cera_transfer_in')  return { label: 'From',      name: tx.from?.name  || 'CERA User', sub: tx.from?.ceraId || '' };
+    if (tx.type === 'cera_transfer_out') return { label: 'To',        name: tx.to?.name    || 'CERA User', sub: tx.to?.ceraId   || '' };
+    if (tx.type === 'bank_payout')       return { label: 'Bank',      name: tx.bankName    || 'Bank',      sub: tx.accountNumber ? `**** ${tx.accountNumber.slice(-4)}` : '' };
+    if (tx.type === 'crypto_receive')    return { label: 'Asset',     name: tx.coin || 'Crypto',           sub: tx.network || '' };
+    if (tx.type === 'utility') {
+      const recipient = tx.smartCard || tx.meterNo || tx.phone || '—';
+      const sub = tx.plan ? `${tx.network} · ${tx.plan}` : (tx.network || '');
+      return { label: tx.utilityType || 'Recipient', name: recipient, sub };
+    }
     return null;
   };
   const party = getParty();
@@ -406,6 +428,30 @@ export default function ReceiptScreen({ route, navigation }) {
               )}
               <ReceiptRow label="Status" value={statusInfo.label} valueColor={statusInfo.color} />
               <ReceiptRow label="Type" value={typeInfo.label} />
+              {tx.type === 'utility' && !!tx.network && (
+                <ReceiptRow label={tx.utilityType === 'Electricity' ? 'DISCO' : 'Network / Provider'} value={tx.network} />
+              )}
+              {tx.type === 'utility' && !!tx.phone && (
+                <ReceiptRow label="Phone" value={tx.phone} />
+              )}
+              {tx.type === 'utility' && !!tx.smartCard && (
+                <ReceiptRow label="Smart Card / IUC" value={tx.smartCard} />
+              )}
+              {tx.type === 'utility' && !!tx.meterNo && (
+                <ReceiptRow label="Meter No." value={tx.meterNo} />
+              )}
+              {tx.type === 'utility' && !!tx.meterType && (
+                <ReceiptRow label="Meter Type" value={tx.meterType} />
+              )}
+              {tx.type === 'utility' && !!tx.plan && (
+                <ReceiptRow label={tx.utilityType === 'TV' ? 'Package' : tx.utilityType === 'Data' ? 'Data Plan' : 'Plan'} value={tx.plan} />
+              )}
+              {tx.type === 'utility' && !!tx.token && (
+                <ReceiptRow label="Electricity Token" value={tx.token} bold valueColor="#F59E0B" />
+              )}
+              {tx.type === 'utility' && !!tx.orderId && (
+                <ReceiptRow label="Order / Session ID" value={tx.orderId} />
+              )}
               <ReceiptRow label="Date" value={formatFull(tx.createdAt)} />
             </View>
 
