@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   Image, ActivityIndicator, Modal,
@@ -8,7 +8,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { feedbackMedium, feedbackSelect } from '../utils/feedback';
-import { buyAirtime, buyData, buyTV, buyElectricity } from '../services/api';
+import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans } from '../services/api';
 
 const BRAND = '#7C3AED';
 const _fav  = d => `https://www.google.com/s2/favicons?domain=${d}&sz=128`;
@@ -162,6 +162,33 @@ const TAB_ORDER  = ['hot', 'daily', 'weekly', 'monthly', 'night'];
 const TAB_LABELS = { hot: 'Hot', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', night: 'Night' };
 const TAB_ICONS  = { hot: 'fire', daily: 'weather-sunny', weekly: 'calendar-week', monthly: 'calendar-month', night: 'weather-night' };
 
+// Categorise a ClubKonnect plan by its validity string
+function tabForDuration(duration) {
+  const d = (duration || '').toLowerCase();
+  if (d.includes('night') || d.includes('mid') || d.includes('12am') || d.includes('5am')) return 'night';
+  if (d.match(/\b1\s*day\b/)  || d.includes('24h') || d.includes('1day'))  return 'daily';
+  if (d.match(/\b(7|14)\s*day/) || d.includes('week'))                       return 'weekly';
+  return 'monthly';
+}
+
+// Build tab-keyed plan map from a flat CK plan array
+function buildDynamicTabs(plans) {
+  const cats = { daily: [], weekly: [], monthly: [], night: [], hot: [] };
+  for (const p of plans) {
+    const cat = tabForDuration(p.duration);
+    cats[cat].push(p);
+  }
+  // Hot = best value plan from each category (cheapest per GB proxy: lowest price per plan chosen)
+  const hot = [];
+  for (const tab of ['daily', 'weekly', 'monthly', 'night']) {
+    const sorted = [...(cats[tab] || [])].sort((a, b) => a.price - b.price);
+    if (sorted[0]) hot.push({ ...sorted[0], tag: tab === 'daily' ? 'Daily Pick' : tab === 'weekly' ? 'Weekly Pick' : tab === 'night' ? 'Night' : 'Monthly Pick' });
+    if (sorted[1]) hot.push(sorted[1]);
+  }
+  cats.hot = hot.slice(0, 6);
+  return cats;
+}
+
 const TV_PLANS = {
   DSTV: [
     { code: 'dstv-padi',         name: 'DStv Padi',     price: 2500,  duration: '1 Month' },
@@ -258,20 +285,49 @@ export default function UtilityScreen({ navigation, route }) {
   const [loading,      setLoading]      = useState(false);
   const [confirm,      setConfirm]      = useState(false);
   const [result,       setResult]       = useState(null);
+  // Dynamic plans fetched from ClubKonnect (null = not yet fetched, {} = fetched)
+  const [ckPlans,      setCkPlans]      = useState(null);
+  const [fetchingPlans,setFetchingPlans]= useState(false);
+  const fetchedFor = useRef('');
+
+  // Fetch real plan codes from ClubKonnect when network is selected in Data mode
+  useEffect(() => {
+    if (!isData || !selectedNet || fetchedFor.current === selectedNet) return;
+    fetchedFor.current = selectedNet;
+    setFetchingPlans(true);
+    setCkPlans(null);
+    getDataPlans(selectedNet)
+      .then(res => {
+        const plans = res.data;
+        if (Array.isArray(plans) && plans.length > 0) {
+          setCkPlans(buildDynamicTabs(plans));
+        } else {
+          setCkPlans({}); // empty means CK gave no plans — fall back to hardcoded
+        }
+      })
+      .catch(() => setCkPlans({}))
+      .finally(() => setFetchingPlans(false));
+  }, [isData, selectedNet]);
+
+  // Use live CK plans if available, otherwise fall back to hardcoded
+  const planSource = useMemo(() => {
+    if (!isData || !selectedNet) return DATA_PLANS[selectedNet] || {};
+    if (ckPlans && Object.keys(ckPlans).some(k => ckPlans[k]?.length > 0)) return ckPlans;
+    return DATA_PLANS[selectedNet] || {};
+  }, [isData, selectedNet, ckPlans]);
 
   // Available category tabs for the selected network
   const availableTabs = useMemo(() => {
     if (!isData || !selectedNet) return [];
-    const plans = DATA_PLANS[selectedNet] || {};
-    return TAB_ORDER.filter(t => plans[t] && plans[t].length > 0);
-  }, [isData, selectedNet]);
+    return TAB_ORDER.filter(t => planSource[t] && planSource[t].length > 0);
+  }, [isData, selectedNet, planSource]);
 
   // Plans for current tab
   const activePlans = useMemo(() => {
-    if (isData)  return DATA_PLANS[selectedNet]?.[planTab] || [];
+    if (isData)  return planSource[planTab] || [];
     if (isTV)    return TV_PLANS[selectedNet] || [];
     return [];
-  }, [isData, isTV, selectedNet, planTab]);
+  }, [isData, isTV, selectedNet, planTab, planSource]);
 
   const selectedPlan = activePlans.find(p => p.code === selectedCode) || null;
 
@@ -295,6 +351,7 @@ export default function UtilityScreen({ navigation, route }) {
     setSelectedNet(n);
     setSelectedCode('');
     setPlanTab('hot');
+    if (isData) { setCkPlans(null); fetchedFor.current = ''; }
   }
 
   function selectTab(t) {
@@ -460,8 +517,18 @@ export default function UtilityScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Data: fetching spinner */}
+        {isData && selectedNet && fetchingPlans && (
+          <View style={{ alignItems: 'center', paddingVertical: 30, gap: 10 }}>
+            <ActivityIndicator color={cfg.color} />
+            <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: FONTS.regular }}>
+              Loading {selectedNet} plans…
+            </Text>
+          </View>
+        )}
+
         {/* Data plan tabs + list */}
-        {isData && selectedNet && (
+        {isData && selectedNet && !fetchingPlans && (
           <View style={S.section}>
             {/* Category tabs */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.tabScroll} contentContainerStyle={S.tabRow}>
@@ -566,7 +633,7 @@ export default function UtilityScreen({ navigation, route }) {
         )}
 
         {/* Data prompt (no network selected yet) */}
-        {isData && !selectedNet && (
+        {isData && !selectedNet && !fetchingPlans && (
           <View style={[S.section, { alignItems: 'center', paddingVertical: 20 }]}>
             <MaterialCommunityIcons name="wifi-off" size={36} color={colors.textMuted} />
             <Text style={[S.emptyPlans, { color: colors.textMuted, marginTop: 10 }]}>Select a network to see plans</Text>

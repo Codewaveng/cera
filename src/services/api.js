@@ -56,9 +56,10 @@ export const checkCeraTag = (tag)  => api.get('/user/check-tag', { params: { tag
 export const claimCeraTag = (tag)  => api.post('/user/claim-tag', { tag });
 
 // Utility (VTU / Bill payments via ClubKonnect)
-export const buyAirtime     = (data) => api.post('/utility/airtime', data);
-export const buyData        = (data) => api.post('/utility/data', data);
-export const buyTV          = (data) => api.post('/utility/tv', data);
-export const buyElectricity = (data) => api.post('/utility/electricity', data);
+export const buyAirtime     = (data)    => api.post('/utility/airtime', data);
+export const buyData        = (data)    => api.post('/utility/data', data);
+export const buyTV          = (data)    => api.post('/utility/tv', data);
+export const buyElectricity = (data)    => api.post('/utility/electricity', data);
+export const getDataPlans   = (network) => api.get('/utility/data-plans', { params: { network } });
 
 export default api;

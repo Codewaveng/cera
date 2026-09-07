@@ -29,6 +29,31 @@ async function ckGet(path) {
   return r.json();
 }
 
+// ── Fetch real data plan list from ClubKonnect ────────────────────────────────
+router.get('/data-plans', auth, async (req, res) => {
+  try {
+    const { network } = req.query;
+    const netCode = NETWORK_CODES[network];
+    if (!netCode) return res.status(400).json({ error: 'Invalid network' });
+
+    const ck = await ckGet(`APIDatabundleListV1.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&MobileNetwork=${netCode}`);
+    console.log('[DataPlans]', network, JSON.stringify(ck).slice(0, 300));
+
+    const raw = Array.isArray(ck) ? ck : (ck?.data ?? []);
+    const plans = raw.map(p => ({
+      code:     String(p.dataplan_id     ?? p.DATAPLAN_ID     ?? p.id       ?? ''),
+      name:     String(p.dataplan_name   ?? p.DATAPLAN_NAME   ?? p.name     ?? ''),
+      price:    parseFloat(p.dataplan_amount ?? p.DATAPLAN_AMOUNT ?? p.amount ?? 0),
+      duration: String(p.dataplan_validity ?? p.DATAPLAN_VALIDITY ?? p.validity ?? ''),
+    })).filter(p => p.code && p.name && p.price > 0);
+
+    res.json(plans);
+  } catch (err) {
+    console.error('[Utility/DataPlans]', err.message);
+    res.status(500).json({ error: 'Failed to fetch plans' });
+  }
+});
+
 // ── Buy Airtime ──────────────────────────────────────────────────────────────
 router.post('/airtime', auth, async (req, res) => {
   try {
