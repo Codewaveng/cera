@@ -160,22 +160,28 @@ const TAB_ICONS  = { hot: 'fire', daily: 'weather-sunny', weekly: 'calendar-week
 
 function tabForDuration(d) {
   const s = (d || '').toLowerCase();
-  if (s.includes('night') || s.includes('mid') || s.includes('12am')) return 'night';
-  if (s.match(/\b1\s*day\b/) || s.includes('24h'))                     return 'daily';
-  if (s.match(/\b(7|14)\s*day/) || s.includes('week'))                 return 'weekly';
+  if (s.includes('night'))                                                   return 'night';
+  if (s.includes('weekend'))                                                 return 'weekly';
+  if (s.match(/\b[1-3]\s*day/) || s.includes('daily') || s.includes('24h')) return 'daily';
+  if (s.match(/\b(7|14)\s*day/) || s.includes('week'))                      return 'weekly';
   return 'monthly';
 }
 
 function buildDynamicTabs(plans) {
   const cats = { daily: [], weekly: [], monthly: [], night: [] };
-  for (const p of plans) cats[tabForDuration(p.duration)].push(p);
+  for (const p of plans) {
+    const bucket = tabForDuration(p.duration);
+    cats[bucket].push(p);
+  }
   const hot = [];
   for (const t of ['daily', 'weekly', 'monthly', 'night']) {
     const sorted = [...(cats[t] || [])].sort((a, b) => a.price - b.price);
-    if (sorted[0]) hot.push({ ...sorted[0], tag: t === 'night' ? 'Night' : t === 'daily' ? 'Daily Pick' : t === 'weekly' ? 'Weekly Pick' : 'Monthly Pick' });
-    if (sorted[1]) hot.push(sorted[1]);
+    const pick   = sorted.find(p => p.tag === 'Awoof' || p.tag === 'Direct') || sorted[0];
+    if (pick) hot.push({ ...pick, hotTag: t === 'night' ? 'Night' : t === 'daily' ? 'Daily' : t === 'weekly' ? 'Weekly' : 'Monthly' });
+    const second = sorted.find(p => p !== pick && p.price > (pick?.price || 0));
+    if (second) hot.push(second);
   }
-  cats.hot = hot.slice(0, 6);
+  cats.hot = hot.slice(0, 8);
   return cats;
 }
 
@@ -535,11 +541,11 @@ export default function UtilityScreen({ navigation, route }) {
                           onPress={() => { feedbackSelect(); setSelectedCode(p.code); }} activeOpacity={0.7}
                         >
                           <View style={S.planLeft}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <Text style={[S.planName, sel && { color: cfg.color }]}>{p.name}</Text>
-                              {p.tag ? <View style={[S.planTag, { backgroundColor: sel ? cfg.color : cfg.color + '20' }]}><Text style={[S.planTagTxt, { color: sel ? '#fff' : cfg.color }]}>{p.tag}</Text></View> : null}
+                              {(p.hotTag || p.tag) ? <View style={[S.planTag, { backgroundColor: sel ? cfg.color : cfg.color + '20' }]}><Text style={[S.planTagTxt, { color: sel ? '#fff' : cfg.color }]}>{p.hotTag || p.tag}</Text></View> : null}
                             </View>
-                            <Text style={S.planDuration}>{p.duration}</Text>
+                            <Text style={S.planDuration} numberOfLines={1}>{p.duration}{p.tag && !p.hotTag ? ` · ${p.tag}` : ''}</Text>
                           </View>
                           <View style={S.planRight}>
                             <Text style={[S.planPrice, sel && { color: cfg.color }]}>₦{p.price.toLocaleString('en-NG')}</Text>
