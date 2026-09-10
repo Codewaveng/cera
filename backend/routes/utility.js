@@ -4,6 +4,22 @@ const crypto   = require('crypto');
 const auth     = require('../middleware/auth');
 const User     = require('../models/User');
 const Transaction = require('../models/Transaction');
+const { sendPush } = require('../utils/pushNotification');
+
+async function checkDailyLimit(user, amtKobo) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const result = await Transaction.aggregate([
+    { $match: { fromUser: user._id, status: 'completed', type: { $in: ['utility', 'bank_payout', 'cera_transfer_out'] }, createdAt: { $gte: start } } },
+    { $group: { _id: null, total: { $sum: '$amountKobo' } } },
+  ]);
+  const spentToday = result[0]?.total || 0;
+  const limit = user.dailyLimitKobo || 20000000;
+  if (spentToday + amtKobo > limit) {
+    const remaining = Math.max(0, limit - spentToday) / 100;
+    throw new Error(`Daily limit reached. You can spend up to ₦${remaining.toLocaleString('en-NG')} more today.`);
+  }
+}
 
 const CK_BASE   = 'https://www.nellobytesystems.com';
 const CK_USER   = process.env.CLUBKONNECT_USER_ID;
@@ -99,6 +115,7 @@ router.post('/airtime', auth, async (req, res) => {
     const user = await User.findById(req.user.id);
     const amtKobo = Math.round(amt * 100);
     if (user.balanceKobo < amtKobo) return res.status(400).json({ error: 'Insufficient balance' });
+    try { await checkDailyLimit(user, amtKobo); } catch (e) { return res.status(400).json({ error: e.message }); }
 
     const requestId = genRequestId();
     const ck = await ckGet(`APIAirtimeV1.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&MobileNetwork=${netCode}&Amount=${amt}&MobileNumber=${phone}&RequestID=${requestId}&CallBackURL=${CB_URL}`);
@@ -121,6 +138,7 @@ router.post('/airtime', auth, async (req, res) => {
       metadata:  { orderId: ck.orderid, requestId, network, phone },
     });
 
+    sendPush(user.fcmToken, 'Airtime Sent!', `₦${amt.toLocaleString()} ${network} airtime sent to ${phone}`, { type: 'utility' });
     res.json({ success: true, orderId: ck.orderid, message: `₦${amt.toLocaleString()} airtime sent to ${phone}` });
   } catch (err) {
     console.error('[Utility/Airtime]', err.message);
@@ -141,6 +159,7 @@ router.post('/data', auth, async (req, res) => {
     const user = await User.findById(req.user.id);
     const amtKobo = Math.round(amt * 100);
     if (user.balanceKobo < amtKobo) return res.status(400).json({ error: 'Insufficient balance' });
+    try { await checkDailyLimit(user, amtKobo); } catch (e) { return res.status(400).json({ error: e.message }); }
 
     const requestId = genRequestId();
     const ck = await ckGet(`APIDatabundleV1.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&MobileNetwork=${netCode}&DataPlan=${planCode}&MobileNumber=${phone}&RequestID=${requestId}&CallBackURL=${CB_URL}`);
@@ -163,6 +182,7 @@ router.post('/data', auth, async (req, res) => {
       metadata:  { orderId: ck.orderid, requestId, network, phone, planCode, planName },
     });
 
+    sendPush(user.fcmToken, 'Data Purchased!', `${planName} data sent to ${phone}`, { type: 'utility' });
     res.json({ success: true, orderId: ck.orderid, message: `${planName} data sent to ${phone}` });
   } catch (err) {
     console.error('[Utility/Data]', err.message);
@@ -180,6 +200,7 @@ router.post('/tv', auth, async (req, res) => {
     const user = await User.findById(req.user.id);
     const amtKobo = Math.round(amt * 100);
     if (user.balanceKobo < amtKobo) return res.status(400).json({ error: 'Insufficient balance' });
+    try { await checkDailyLimit(user, amtKobo); } catch (e) { return res.status(400).json({ error: e.message }); }
 
     const requestId = genRequestId();
     const ck = await ckGet(`APICableTVV1.asp?UserID=${CK_USER}&APIKey=${CK_KEY}&CableTV=${provider.toLowerCase()}&Package=${packageCode}&SmartCardNo=${smartCard}&PhoneNo=${phone}&RequestID=${requestId}&CallBackURL=${CB_URL}`);
@@ -202,6 +223,7 @@ router.post('/tv', auth, async (req, res) => {
       metadata:  { orderId: ck.orderid, requestId, provider, smartCard, packageCode, packageName },
     });
 
+    sendPush(user.fcmToken, 'TV Subscription Done!', `${packageName} activated for ${smartCard}`, { type: 'utility' });
     res.json({ success: true, orderId: ck.orderid, message: `${packageName} subscription activated for ${smartCard}` });
   } catch (err) {
     console.error('[Utility/TV]', err.message);
@@ -223,6 +245,7 @@ router.post('/electricity', auth, async (req, res) => {
     const user = await User.findById(req.user.id);
     const amtKobo = Math.round(amt * 100);
     if (user.balanceKobo < amtKobo) return res.status(400).json({ error: 'Insufficient balance' });
+    try { await checkDailyLimit(user, amtKobo); } catch (e) { return res.status(400).json({ error: e.message }); }
 
     const requestId  = genRequestId();
     const meterCode  = meterType === 'Postpaid' ? '02' : '01';
@@ -246,6 +269,7 @@ router.post('/electricity', auth, async (req, res) => {
       metadata:  { orderId: ck.orderid, requestId, disco, meterNo, meterType, token: ck.metertoken },
     });
 
+    sendPush(user.fcmToken, 'Electricity Purchased!', `₦${amt.toLocaleString()} units for Meter ${meterNo}${ck.metertoken ? ` — Token: ${ck.metertoken}` : ''}`, { type: 'utility' });
     res.json({
       success: true,
       orderId: ck.orderid,

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,16 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { feedbackSelect, feedbackLight } from '../utils/feedback';
 
 const TIME_FILTERS = ['Week', 'Month', 'Year'];
+
+const TYPE_FILTERS = [
+  { key: 'all',               label: 'All' },
+  { key: 'crypto_receive',    label: 'Crypto' },
+  { key: 'cera_transfer_in',  label: 'Received' },
+  { key: 'cera_transfer_out', label: 'Sent' },
+  { key: 'utility',           label: 'Utilities' },
+  { key: 'bank_payout',       label: 'Bank Out' },
+  { key: 'funding',           label: 'Deposits' },
+];
 
 const SPEND_CATEGORIES = [
   { key: 'bank_payout',       label: 'Bank Transfer',   icon: 'business-outline',      color: '#6366F1' },
@@ -92,8 +103,23 @@ export default function HistoryScreen({ navigation: navProp }) {
   const [txns, setTxns]               = useState([]);
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
+  const [search, setSearch]           = useState('');
+  const [typeFilter, setTypeFilter]   = useState('all');
   const tabAnim = useRef(new Animated.Value(0)).current;
   const S = useMemo(() => makeStyles(colors), [colors]);
+
+  const filteredTxns = useMemo(() => {
+    return txns.filter(t => {
+      if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return (t.narration || '').toLowerCase().includes(q) ||
+               (t.type || '').toLowerCase().includes(q) ||
+               (t.txId || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [txns, search, typeFilter]);
 
   useFocusEffect(useCallback(() => {
     fetchTxns();
@@ -151,8 +177,44 @@ export default function HistoryScreen({ navigation: navProp }) {
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : activeTab === 0 ? (
+        <>
+          {/* Search bar */}
+          <View style={[S.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={17} color={colors.textMuted} />
+            <TextInput
+              style={[S.searchInput, { color: colors.text }]}
+              placeholder="Search transactions…"
+              placeholderTextColor={colors.textMuted}
+              value={search}
+              onChangeText={setSearch}
+              returnKeyType="search"
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Type filter chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.typeRow}>
+            {TYPE_FILTERS.map(f => {
+              const active = typeFilter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[S.typeChip, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={() => { feedbackSelect(); setTypeFilter(f.key); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[S.typeChipTxt, active && { color: '#fff' }]}>{f.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
         <FlatList
-          data={txns}
+          data={filteredTxns}
           keyExtractor={(item) => item.txId}
           renderItem={({ item }) => (
             <TransactionItem
@@ -176,11 +238,12 @@ export default function HistoryScreen({ navigation: navProp }) {
               <View style={[S.emptyIconWrap, { backgroundColor: colors.cardAlt }]}>
                 <Ionicons name="document-text-outline" size={36} color={colors.textMuted} />
               </View>
-              <Text style={S.emptyTitle}>No transactions yet</Text>
-              <Text style={S.emptySubtitle}>Your transactions will appear here</Text>
+              <Text style={S.emptyTitle}>{search || typeFilter !== 'all' ? 'No results' : 'No transactions yet'}</Text>
+              <Text style={S.emptySubtitle}>{search || typeFilter !== 'all' ? 'Try a different search or filter' : 'Your transactions will appear here'}</Text>
             </View>
           }
         />
+        </>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -337,6 +400,12 @@ function makeStyles(C) {
     flowLabel: { color: C.text, fontSize: 13, fontFamily: FONTS.medium },
     flowAmt: { fontSize: 13, fontFamily: FONTS.bold },
     flowEmpty: { color: C.textMuted, fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 8 },
+
+    searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginBottom: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+    searchInput: { flex: 1, fontSize: 14, fontFamily: FONTS.regular },
+    typeRow: { paddingHorizontal: 20, gap: 8, paddingBottom: 10 },
+    typeChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card },
+    typeChipTxt: { color: C.textMuted, fontSize: 12, fontFamily: FONTS.semibold },
 
     empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
     emptyIconWrap: {

@@ -79,23 +79,26 @@ export const CRYPTOS = [
   },
 ];
 
-export const NIGERIAN_BANKS = [
-  'Access Bank',
-  'Zenith Bank',
-  'GTBank',
-  'First Bank of Nigeria',
-  'UBA',
-  'Stanbic IBTC',
-  'Wema Bank',
-  'Kuda Bank',
-  'Opay',
-  'PalmPay',
-  'Moniepoint',
-  'Fidelity Bank',
-  'Polaris Bank',
-  'Sterling Bank',
-  'Ecobank',
-];
+// Paystack bank codes — used for bank account verification and transfers
+export const BANK_CODES_MAP = {
+  'Access Bank':         '044',
+  'Zenith Bank':         '057',
+  'GTBank':              '058',
+  'First Bank of Nigeria': '011',
+  'UBA':                 '033',
+  'Stanbic IBTC':        '221',
+  'Wema Bank':           '035',
+  'Kuda Bank':           '090267',
+  'Opay':                '100004',
+  'PalmPay':             '999991',
+  'Moniepoint':          '090405',
+  'Fidelity Bank':       '070',
+  'Polaris Bank':        '076',
+  'Sterling Bank':       '232',
+  'Ecobank':             '050',
+};
+
+export const NIGERIAN_BANKS = Object.keys(BANK_CODES_MAP);
 
 export const RECENT_CONTACTS = [
   { id: 1, name: 'James Okafor', bank: 'GTBank', accountNumber: '0123456789', initials: 'JO', color: '#7C3AED' },

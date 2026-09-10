@@ -116,8 +116,9 @@ export default function AutoProcessingConfirmScreen({ navigation, route }) {
                 bankName: bank.bank,
                 accountNumber: bank.accountNumber,
                 accountName: bank.accountName,
+                bankCode: bank.bankCode,
               });
-              refreshUser({ autoProcessing: { enabled: true, bankName: bank.bank, accountNumber: bank.accountNumber, accountName: bank.accountName } });
+              refreshUser({ autoProcessing: { enabled: true, bankName: bank.bank, accountNumber: bank.accountNumber, accountName: bank.accountName, bankCode: bank.bankCode } });
               feedbackSuccess();
               navigation.replace('AutoProcessingSuccess', { bank });
             } catch {

@@ -11,9 +11,11 @@ import AppModal from '../components/AppModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
 
 export default function SecurityScreen({ navigation }) {
   const { colors } = useTheme();
+  const { token } = useAuth();
   const S = useMemo(() => makeStyles(colors), [colors]);
 
   const [biometrics, setBiometrics] = useState(false);
@@ -51,6 +53,7 @@ export default function SecurityScreen({ navigation }) {
         if (result.success) {
           feedbackSuccess();
           await AsyncStorage.setItem('cera_biometrics_enabled', 'true');
+          if (token) await AsyncStorage.setItem('cera_bio_token', token);
           setBiometrics(true);
         }
       } catch {

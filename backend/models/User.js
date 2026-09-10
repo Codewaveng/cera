@@ -58,6 +58,36 @@ const userSchema = new mongoose.Schema({
   referralCount:        { type: Number, default: 0 },
   referralEarningsKobo: { type: Number, default: 0 },
 
+  // Saved beneficiaries (for airtime/data quick-dial)
+  beneficiaries: [{
+    name:    { type: String, default: '' },
+    phone:   { type: String, required: true },
+    network: { type: String, default: '' },
+    type:    { type: String, enum: ['airtime', 'data'], default: 'airtime' },
+    label:   { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now },
+  }],
+
+  // Rate alerts
+  rateAlerts: [{
+    coin:       { type: String, required: true },
+    targetRate: { type: Number, required: true },
+    direction:  { type: String, enum: ['above', 'below'], required: true },
+    active:     { type: Boolean, default: true },
+    createdAt:  { type: Date, default: Date.now },
+  }],
+
+  // Daily transaction limit in kobo (default ₦200,000)
+  dailyLimitKobo: { type: Number, default: 20000000 },
+
+  // Support tickets
+  supportTickets: [{
+    subject:   { type: String, required: true },
+    message:   { type: String, required: true },
+    status:    { type: String, enum: ['open', 'in_progress', 'closed'], default: 'open' },
+    createdAt: { type: Date, default: Date.now },
+  }],
+
   // Login history (capped at 30 entries)
   loginHistory: [{
     ip:        { type: String, default: '' },
