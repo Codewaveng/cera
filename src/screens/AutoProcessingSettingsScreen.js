@@ -90,6 +90,7 @@ export default function AutoProcessingSettingsScreen({ navigation }) {
         bankName: fresh.bankName,
         accountNumber: fresh.accountNumber,
         accountName: fresh.accountName,
+        bankCode: fresh.bankCode,
       });
       refreshUser({ autoProcessing: { ...fresh, enabled: val } });
     } catch {

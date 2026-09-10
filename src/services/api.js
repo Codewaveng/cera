@@ -62,4 +62,25 @@ export const buyTV          = (data)    => api.post('/utility/tv', data);
 export const buyElectricity = (data)    => api.post('/utility/electricity', data);
 export const getDataPlans   = (network) => api.get('/utility/data-plans', { params: { network } });
 
+// Bank account verification
+export const verifyBankAccountByCode = (accountNumber, bankCode) =>
+  api.get('/user/verify-account', { params: { accountNumber, bankCode } });
+
+// Beneficiaries
+export const getBeneficiaries    = ()            => api.get('/user/beneficiaries');
+export const addBeneficiary      = (data)        => api.post('/user/beneficiaries', data);
+export const deleteBeneficiary   = (id)          => api.delete(`/user/beneficiaries/${id}`);
+
+// Rate alerts
+export const getRateAlerts       = ()            => api.get('/user/rate-alerts');
+export const addRateAlert        = (data)        => api.post('/user/rate-alerts', data);
+export const deleteRateAlert     = (id)          => api.delete(`/user/rate-alerts/${id}`);
+
+// Support
+export const submitSupportTicket = (data)        => api.post('/user/support', data);
+export const getSupportTickets   = ()            => api.get('/user/support');
+
+// Filtered transactions
+export const getTransactionsFilt = (params)      => api.get('/user/transactions', { params });
+
 export default api;

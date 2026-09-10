@@ -10,15 +10,50 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import CustomInput from '../components/CustomInput';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { getMe } from '../services/api';
 
 const LOGO = require('../../assets/logo.png');
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const { login, refreshUser } = useAuth();
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  const [bioAvailable, setBioAvailable] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const bioEnabled = await AsyncStorage.getItem('cera_biometrics_enabled');
+      const bioToken   = await AsyncStorage.getItem('cera_bio_token');
+      if (bioEnabled === 'true' && bioToken) setBioAvailable(true);
+    })();
+  }, []);
+
+  async function handleBiometricLogin() {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Log in to CERA',
+        disableDeviceFallback: false,
+        cancelLabel: 'Use password',
+      });
+      if (!result.success) return;
+      setLoading(true);
+      const bioToken = await AsyncStorage.getItem('cera_bio_token');
+      if (!bioToken) { setBioAvailable(false); return; }
+      // Restore session using stored token
+      await AsyncStorage.setItem('cera_token', bioToken);
+      const res = await getMe();
+      refreshUser(res.data.user);
+      navigation.replace(res.data.user.pinSet ? 'Main' : 'PinSetup');
+    } catch {
+      setError('Biometric login failed. Please sign in manually.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const heroFade  = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(-20)).current;
@@ -130,6 +165,13 @@ export default function LoginScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
+            {bioAvailable && (
+              <TouchableOpacity style={styles.bioBtn} onPress={handleBiometricLogin} activeOpacity={0.8}>
+                <Ionicons name="finger-print-outline" size={22} color={COLORS.primary} />
+                <Text style={styles.bioBtnText}>Login with Biometrics</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account?  </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -212,6 +254,9 @@ const styles = StyleSheet.create({
   btn: { borderRadius: 16, overflow: 'hidden', marginBottom: 24 },
   btnInner: { height: 56, alignItems: 'center', justifyContent: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bold },
+
+  bioBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.primary + '40', paddingVertical: 13, marginBottom: 16, backgroundColor: COLORS.primary + '08' },
+  bioBtnText: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.semibold },
 
   footerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { color: '#94A3B8', fontSize: 14, fontFamily: FONTS.regular },

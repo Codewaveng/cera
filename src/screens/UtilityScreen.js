@@ -8,7 +8,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
 import { useTheme } from '../context/ThemeContext';
 import { feedbackMedium, feedbackSelect } from '../utils/feedback';
-import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans, verifyPin } from '../services/api';
+import { buyAirtime, buyData, buyTV, buyElectricity, getDataPlans, verifyPin, getBeneficiaries, addBeneficiary } from '../services/api';
 import { registerPinCallback } from './PinEntryScreen';
 
 const BRAND = '#7C3AED';
@@ -285,6 +285,13 @@ export default function UtilityScreen({ navigation, route }) {
   // UI state
   const [confirm, setConfirm] = useState(false);
 
+  // Beneficiaries
+  const [beneficiaries, setBeneficiaries] = useState([]);
+  useEffect(() => {
+    if (!isAirtime && !isData) return;
+    getBeneficiaries().then(r => setBeneficiaries(r.data.beneficiaries || [])).catch(() => {});
+  }, [isAirtime, isData]);
+
   // Fetch real CK plans when network is selected in Data mode.
   // While loading: show skeleton (never switch plans mid-selection).
   // On failure: fall back to hardcoded DATA_PLANS.
@@ -410,6 +417,15 @@ export default function UtilityScreen({ navigation, route }) {
           orderId:     d.orderId || null,
         };
         goBack();
+        // Auto-save as beneficiary for airtime/data
+        if ((snap.isAirtime || snap.isData) && snap.phoneNumber) {
+          const already = beneficiaries.some(b => b.phone === snap.phoneNumber && b.network === snap.selectedNet);
+          if (!already) {
+            addBeneficiary({ name: snap.phoneNumber, phone: snap.phoneNumber, network: snap.selectedNet, type: snap.isAirtime ? 'airtime' : 'data' })
+              .then(r => setBeneficiaries(r.data.beneficiaries || []))
+              .catch(() => {});
+          }
+        }
         navigation.navigate('Receipt', { tx: receiptTx });
       } catch (err) {
         onError(err?.response?.data?.error || 'Payment failed. Please try again.');
@@ -491,6 +507,28 @@ export default function UtilityScreen({ navigation, route }) {
         {/* Phone number */}
         <View style={S.section}>
           <Text style={S.sectionLabel}>{isTV ? 'PHONE NUMBER (NOTIFICATION)' : 'PHONE NUMBER'}</Text>
+          {/* Saved beneficiaries quick-select */}
+          {(isAirtime || isData) && beneficiaries.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }} style={{ marginBottom: 8 }}>
+              {beneficiaries.filter(b => !selectedNet || b.network === selectedNet || !b.network).slice(0, 6).map(b => (
+                <TouchableOpacity
+                  key={b._id}
+                  style={[S.beneChip, phoneNumber === b.phone && { borderColor: cfg.color, backgroundColor: cfg.color + '12' }]}
+                  onPress={() => {
+                    feedbackSelect();
+                    setPhoneNumber(b.phone);
+                    if (b.network && b.network !== selectedNet) selectNetwork(b.network);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <View style={[S.beneAvatar, { backgroundColor: cfg.color + '20' }]}>
+                    <Text style={[S.beneAvatarTxt, { color: cfg.color }]}>{(b.name || b.phone).slice(-4)}</Text>
+                  </View>
+                  <Text style={[S.benePhone, phoneNumber === b.phone && { color: cfg.color }]} numberOfLines={1}>{b.phone}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
           <View style={S.inputWrap}>
             <TextInput style={S.input} placeholder="080XXXXXXXX" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} maxLength={14} />
           </View>
@@ -729,6 +767,11 @@ function makeStyles(C) {
     planPrice:    { color: C.text, fontSize: 14, fontFamily: FONTS.bold },
     planRadio:    { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     planDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+
+    beneChip:      { alignItems: 'center', borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 12, paddingVertical: 8, minWidth: 72 },
+    beneAvatar:    { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+    beneAvatarTxt: { fontSize: 10, fontFamily: FONTS.bold },
+    benePhone:     { fontSize: 10, fontFamily: FONTS.semibold, color: C.textMuted, textAlign: 'center' },
 
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip:    { borderRadius: 12, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 16, paddingVertical: 11 },

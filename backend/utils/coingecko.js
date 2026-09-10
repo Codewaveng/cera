@@ -1,4 +1,6 @@
 const axios = require('axios');
+const User  = require('../models/User');
+const { sendPush } = require('./pushNotification');
 
 // In-memory cache — refreshed every 2 minutes by cron
 let ratesCache = {};
@@ -40,9 +42,36 @@ async function refreshRates() {
       ratesCache = fresh;
       lastUpdated = new Date();
       console.log('📈 Rates refreshed:', new Date().toISOString());
+      checkRateAlerts(fresh).catch(() => {});
     }
   } catch (err) {
     console.warn('⚠️  CoinGecko fetch failed:', err.message);
+  }
+}
+
+async function checkRateAlerts(rates) {
+  const users = await User.find({ 'rateAlerts.active': true }).select('fcmToken rateAlerts');
+  for (const user of users) {
+    let changed = false;
+    for (const alert of user.rateAlerts) {
+      if (!alert.active) continue;
+      const rate = rates[alert.coin]?.priceNGN;
+      if (!rate) continue;
+      const triggered =
+        (alert.direction === 'above' && rate >= alert.targetRate) ||
+        (alert.direction === 'below' && rate <= alert.targetRate);
+      if (triggered) {
+        sendPush(
+          user.fcmToken,
+          `Rate Alert: ${alert.coin}`,
+          `${alert.coin} is now ₦${rate.toLocaleString('en-NG')} — ${alert.direction === 'above' ? 'above' : 'below'} your target of ₦${alert.targetRate.toLocaleString('en-NG')}`,
+          { type: 'rate_alert', coin: alert.coin }
+        );
+        alert.active = false;
+        changed = true;
+      }
+    }
+    if (changed) await user.save();
   }
 }
 

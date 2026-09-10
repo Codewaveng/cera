@@ -14,12 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { FONTS } from '../constants/colors';
-import { NIGERIAN_BANKS } from '../constants/data';
+import { NIGERIAN_BANKS, BANK_CODES_MAP } from '../constants/data';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { feedbackLight, feedbackSelect, feedbackSuccess } from '../utils/feedback';
 import BankLogo from '../components/BankLogo';
-import { verifyBankAccount } from '../services/api';
+import { verifyBankAccountByCode } from '../services/api';
 
 const SUPPORTED_COINS = [
   { symbol: 'BTC', color: '#F7931A' },
@@ -79,7 +79,7 @@ export default function AutoProcessingSetupScreen({ navigation }) {
     setResolving(true);
     verifyRef.current = setTimeout(async () => {
       try {
-        const res = await verifyBankAccount(accNum, bankName);
+        const res = await verifyBankAccountByCode(accNum, BANK_CODES_MAP[bankName]);
         feedbackSuccess();
         setAccountName(res.data.accountName);
       } catch {
@@ -236,7 +236,7 @@ export default function AutoProcessingSetupScreen({ navigation }) {
           onPress={() => {
             feedbackSelect();
             navigation.navigate('AutoProcessingConfirm', {
-              bank: { bank, accountNumber, accountName },
+              bank: { bank, accountNumber, accountName, bankCode: BANK_CODES_MAP[bank] },
             });
           }}
           style={S.activateBtn}

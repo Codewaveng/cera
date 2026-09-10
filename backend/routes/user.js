@@ -45,9 +45,9 @@ router.put('/fcm-token', async (req, res) => {
 // PUT /api/user/auto-processing
 router.put('/auto-processing', async (req, res) => {
   try {
-    const { enabled, bankName, accountNumber, accountName } = req.body;
+    const { enabled, bankName, accountNumber, accountName, bankCode } = req.body;
     const user = await User.findById(req.user._id);
-    user.autoProcessing = { enabled: !!enabled, bankName, accountNumber, accountName };
+    user.autoProcessing = { enabled: !!enabled, bankName, accountNumber, accountName, bankCode };
     await user.save();
     res.json({ autoProcessing: user.autoProcessing });
   } catch (err) {
@@ -146,20 +146,35 @@ router.post('/claim-tag', async (req, res) => {
 // GET /api/user/transactions
 router.get('/transactions', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const { type, search, from_date, to_date } = req.query;
 
     const uid = req.user._id;
-    const txns = await Transaction.find({
-      $or: [
-        // Outgoing CERA transfers — only visible to the sender
-        { type: 'cera_transfer_out', fromUser: uid },
-        // Incoming CERA transfers — only visible to the recipient
-        { type: 'cera_transfer_in', toUser: uid },
-        // All other types (crypto_receive, bank_payout, utility, funding)
-        { type: { $nin: ['cera_transfer_out', 'cera_transfer_in'] }, $or: [{ fromUser: uid }, { toUser: uid }] },
-      ],
-    })
+
+    // Build base visibility filter
+    const visibilityOr = [
+      { type: 'cera_transfer_out', fromUser: uid },
+      { type: 'cera_transfer_in',  toUser:   uid },
+      { type: { $nin: ['cera_transfer_out', 'cera_transfer_in'] }, $or: [{ fromUser: uid }, { toUser: uid }] },
+    ];
+
+    const baseFilter = { $or: visibilityOr };
+
+    // Optional type filter
+    if (type && type !== 'all') baseFilter.type = type;
+
+    // Optional narration search
+    if (search) baseFilter.narration = { $regex: search, $options: 'i' };
+
+    // Optional date range
+    if (from_date || to_date) {
+      baseFilter.createdAt = {};
+      if (from_date) baseFilter.createdAt.$gte = new Date(from_date);
+      if (to_date)   baseFilter.createdAt.$lte = new Date(to_date);
+    }
+
+    const txns = await Transaction.find(baseFilter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -228,6 +243,125 @@ router.get('/login-activity', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Verify bank account (Paystack) ───────────────────────────────────────────
+router.get('/verify-account', async (req, res) => {
+  try {
+    const { accountNumber, bankCode } = req.query;
+    if (!accountNumber || !bankCode) return res.status(400).json({ error: 'accountNumber and bankCode required' });
+    const r = await fetch(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET}` },
+    });
+    const data = await r.json();
+    if (!data.status) return res.status(400).json({ error: data.message || 'Could not verify account' });
+    res.json({ accountName: data.data.account_name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Beneficiaries ─────────────────────────────────────────────────────────────
+router.get('/beneficiaries', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('beneficiaries');
+    res.json({ beneficiaries: user.beneficiaries || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/beneficiaries', async (req, res) => {
+  try {
+    const { name, phone, network, type, label } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    const user = await User.findById(req.user._id);
+    user.beneficiaries.push({ name: name || '', phone, network: network || '', type: type || 'airtime', label: label || name || phone });
+    await user.save();
+    res.json({ beneficiaries: user.beneficiaries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/beneficiaries/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.beneficiaries = user.beneficiaries.filter(b => b._id.toString() !== req.params.id);
+    await user.save();
+    res.json({ beneficiaries: user.beneficiaries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Rate Alerts ───────────────────────────────────────────────────────────────
+router.get('/rate-alerts', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('rateAlerts');
+    res.json({ rateAlerts: user.rateAlerts || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/rate-alerts', async (req, res) => {
+  try {
+    const { coin, targetRate, direction } = req.body;
+    if (!coin || !targetRate || !direction) return res.status(400).json({ error: 'coin, targetRate, direction required' });
+    const user = await User.findById(req.user._id);
+    user.rateAlerts.push({ coin, targetRate: parseFloat(targetRate), direction, active: true });
+    await user.save();
+    res.json({ rateAlerts: user.rateAlerts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/rate-alerts/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.rateAlerts = user.rateAlerts.filter(a => a._id.toString() !== req.params.id);
+    await user.save();
+    res.json({ rateAlerts: user.rateAlerts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Support Tickets ───────────────────────────────────────────────────────────
+router.post('/support', async (req, res) => {
+  try {
+    const { subject, message } = req.body;
+    if (!subject || !message) return res.status(400).json({ error: 'subject and message required' });
+    const user = await User.findById(req.user._id);
+    user.supportTickets.push({ subject: subject.trim(), message: message.trim() });
+    await user.save();
+    res.json({ message: 'Ticket submitted. We will respond within 24 hours.', ticketId: user.supportTickets[user.supportTickets.length - 1]._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/support', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('supportTickets');
+    res.json({ tickets: (user.supportTickets || []).reverse() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper: total spent today in kobo
+async function getDailySpend(userId) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const result = await Transaction.aggregate([
+    { $match: { fromUser: userId, status: 'completed', type: { $in: ['utility', 'bank_payout', 'cera_transfer_out'] }, createdAt: { $gte: start } } },
+    { $group: { _id: null, total: { $sum: '$amountKobo' } } },
+  ]);
+  return result[0]?.total || 0;
+}
+module.exports.getDailySpend = getDailySpend;
 
 function parseDeviceName(ua = '') {
   if (/iPhone/i.test(ua))  return 'iPhone';
