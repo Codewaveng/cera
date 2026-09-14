@@ -234,7 +234,7 @@ function DepositCard({ address, coin, amount, timer, status, onDone, type, swapI
 // ─── OfframpWidget ────────────────────────────────────────────────────────────
 
 function OfframpWidget() {
-  const [coin, setCoin]       = useState('USDT')
+  const coin  = 'USDC'
   const [chain, setChain]     = useState('ETH')
   const [amount, setAmount]   = useState('')
   const [bank, setBank]       = useState(BANKS[0].code)
@@ -251,7 +251,7 @@ function OfframpWidget() {
 
   useEffect(() => {
     fetch('/api/rates').then(r => r.json()).then(d => setRate(d[coin]?.priceNGN || null)).catch(() => {})
-  }, [coin])
+  }, [])
 
   useEffect(() => {
     if (step !== 'pending') return
@@ -286,7 +286,7 @@ function OfframpWidget() {
       const r = await fetch('/api/guest/create', {
         method:'POST', headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
-          coin, chain:(coin==='USDT'||coin==='USDC') ? chain : undefined,
+          coin, chain,
           amount:Number(amount), bankCode:bank, bankName:bankObj?.name||bank,
           accountNumber:accNum, accountName:accName,
         }),
@@ -298,11 +298,10 @@ function OfframpWidget() {
     finally { setLoading(false) }
   }
 
-  const isStable = coin === 'USDT' || coin === 'USDC'
   const nairaVal = amount && rate ? Number(amount) * rate : null
 
   if (step !== 'form') return (
-    <DepositCard address={deposit?.depositAddress} coin={coin+(isStable?` (${chain})`:'')}
+    <DepositCard address={deposit?.depositAddress} coin={`USDC (${chain})`}
       amount={deposit?.expectedAmount} timer={timer} status={status} type="offramp"
       onDone={() => { setStep('form'); setStatus('waiting'); setTimer(1800); setDeposit(null); setAmount('') }} />
   )
@@ -310,22 +309,23 @@ function OfframpWidget() {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div>
-        <label style={labelStyle}>You Send</label>
+        <label style={labelStyle}>You Send (USDC)</label>
         <div style={{ display:'flex', gap:8 }}>
           <input className="input-field" type="number" placeholder="0.00" value={amount}
             onChange={e => setAmount(e.target.value)} style={{ flex:1, fontWeight:700, fontSize:17 }} />
-          <CoinSelect value={coin} onChange={v => { setCoin(v); if (STABLECOIN_CHAINS[v]) setChain(STABLECOIN_CHAINS[v][0]) }} coins={COINS} style={{ width:148 }} />
+          <div className="input-field" style={{ width:148, display:'flex', alignItems:'center', gap:8, background:'#F8FAFC' }}>
+            <img src="https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/usdc.svg" alt="" style={{ width:18, height:18 }} />
+            <span style={{ fontWeight:700, fontSize:14, color:'#0F172A' }}>USDC</span>
+          </div>
         </div>
-        {isStable && (
-          <select className="input-field" value={chain} onChange={e => setChain(e.target.value)} style={{ marginTop:8, appearance:'none', fontSize:13 }}>
-            {STABLECOIN_CHAINS[coin].map(c => <option key={c} value={c}>{coin} on {c}</option>)}
-          </select>
-        )}
+        <select className="input-field" value={chain} onChange={e => setChain(e.target.value)} style={{ marginTop:8, appearance:'none', fontSize:13 }}>
+          {STABLECOIN_CHAINS.USDC.map(c => <option key={c} value={c}>USDC on {c}</option>)}
+        </select>
         {nairaVal && (
           <div style={{ marginTop:7, display:'flex', alignItems:'center', gap:6 }}>
             <div style={{ width:7, height:7, borderRadius:'50%', background:'#10B981', flexShrink:0 }} />
             <span style={{ fontSize:13, color:'#10B981', fontWeight:700 }}>≈ {fmtNaira(nairaVal)}</span>
-            <span style={{ fontSize:12, color:'#94A3B8' }}>· Rate: {fmtNaira(rate)}/{coin}</span>
+            <span style={{ fontSize:12, color:'#94A3B8' }}>· Rate: {fmtNaira(rate)}/USDC</span>
           </div>
         )}
       </div>
@@ -346,7 +346,7 @@ function OfframpWidget() {
       {error && <p style={{ color:'#EF4444', fontSize:13, fontWeight:600, background:'#FEF2F2', padding:'9px 13px', borderRadius:9, border:'1px solid #FECACA' }}>{error}</p>}
 
       <button className="btn-primary" onClick={onSubmit} disabled={loading}>
-        {loading ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}><IcSpin/> Getting address...</span> : 'Convert to Naira'}
+        {loading ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}><IcSpin/> Getting address...</span> : 'Convert USDC to Naira'}
       </button>
       <p style={{ fontSize:12, color:'#94A3B8', textAlign:'center' }}>Live CoinGecko rates · No account needed</p>
     </div>
@@ -499,14 +499,9 @@ const labelStyle = { fontSize:11, color:'#94A3B8', fontWeight:700, textTransform
 // ─── ConversionWidget ─────────────────────────────────────────────────────────
 
 function ConversionWidget() {
-  const [tab, setTab] = useState('offramp')
   return (
     <div className="widget-card" style={{ padding:26 }}>
-      <div className="tab-bar" style={{ marginBottom:20 }}>
-        <button className={`tab-btn ${tab==='offramp'?'active':''}`} onClick={() => setTab('offramp')}>Offramp to Naira</button>
-        <button className={`tab-btn ${tab==='swap'?'active':''}`} onClick={() => setTab('swap')}>Crypto Swap</button>
-      </div>
-      {tab === 'offramp' ? <OfframpWidget /> : <SwapWidget />}
+      <OfframpWidget />
     </div>
   )
 }
@@ -675,7 +670,7 @@ function WidgetSection() {
             Try it now.{' '}<span className="mark">No signup.</span>
           </h2>
           <p style={{ color:'#64748B', marginTop:14, fontSize:15, lineHeight:1.8, maxWidth:400 }}>
-            Offramp any crypto to Naira or swap coin-to-coin in seconds. Just enter the amount and your bank — that is it.
+            Send USDC and receive Naira directly in your Nigerian bank account. No account needed — just enter the amount and your bank details.
           </p>
 
           {/* Lightning callout */}
